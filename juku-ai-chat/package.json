@@ -1,0 +1,9 @@
+{
+  "name": "juku-ai-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "進学塾 湊 質問AIチャット",
+  "engines": {
+    "node": ">=18"
+  }
+}

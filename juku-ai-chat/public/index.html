@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>進学塾 湊 質問AI</title>
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="initKaTeX()"></script>
+
+  <style>
+    :root {
+      --color-primary:    #1B3A5B;
+      --color-accent:     #2E86C1;
+      --color-accent-soft:#EAF3FA;
+      --color-bg:         #F7FAFC;
+      --color-surface:    #FFFFFF;
+      --color-user-bubble:#1B3A5B;
+      --color-text:       #243441;
+      --color-muted:      #6B7B8A;
+      --color-warn:       #C0712B;
+      --radius: 14px;
+      --font: "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--color-bg);
+      color: var(--color-text);
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ── ヘッダー ── */
+    header {
+      background: var(--color-primary);
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.03em; }
+    #student-info { font-size: 0.82rem; opacity: 0.85; white-space: nowrap; }
+    #btn-rename {
+      background: none; border: 1px solid rgba(255,255,255,0.5);
+      color: #fff; border-radius: 20px; padding: 2px 10px;
+      font-size: 0.75rem; cursor: pointer; margin-left: 8px;
+    }
+    #btn-rename:hover { background: rgba(255,255,255,0.15); }
+
+    /* ── 注意バー ── */
+    #warn-bar {
+      background: #FFF8F0;
+      border-bottom: 1px solid #F3D8B5;
+      color: var(--color-warn);
+      font-size: 0.78rem;
+      padding: 6px 16px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* ── チャット表示エリア ── */
+    #chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .msg-row.user  { flex-direction: row-reverse; }
+    .msg-row.model { flex-direction: row; }
+
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0;
+    }
+    .msg-row.user  .avatar { background: var(--color-user-bubble); color: #fff; }
+    .msg-row.model .avatar { background: var(--color-accent); color: #fff; }
+
+    .bubble {
+      max-width: min(75%, 520px);
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      line-height: 1.65;
+      font-size: 0.93rem;
+      word-break: break-word;
+    }
+    .msg-row.user  .bubble {
+      background: var(--color-user-bubble);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg-row.model .bubble {
+      background: var(--color-accent-soft);
+      color: var(--color-text);
+      border: 1px solid #BDD9EF;
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble img.preview {
+      display: block; max-width: 100%; border-radius: 8px; margin-top: 6px;
+    }
+    .bubble .ai-footer {
+      display: block; margin-top: 8px;
+      font-size: 0.76rem; color: var(--color-muted);
+    }
+
+    /* ローディングドット */
+    .loading-dots span {
+      display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; background: var(--color-accent);
+      margin: 0 2px; animation: bounce 1.2s infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%,80%,100% { transform: translateY(0); opacity: 0.5; }
+      40% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* ── 入力フォーム ── */
+    #input-area {
+      background: var(--color-surface);
+      border-top: 1px solid #D6E4F0;
+      padding: 10px 12px;
+      flex-shrink: 0;
+    }
+    #image-preview-wrap {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    #image-preview-wrap.visible { display: flex; }
+    #image-preview-thumb {
+      height: 52px; border-radius: 6px; object-fit: cover;
+    }
+    #btn-remove-img {
+      background: none; border: none; cursor: pointer;
+      font-size: 1.1rem; color: var(--color-muted);
+    }
+    #input-row {
+      display: flex; gap: 8px; align-items: flex-end;
+    }
+    #msg-input {
+      flex: 1;
+      resize: none;
+      border: 1px solid #C5D9E8;
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-size: 0.93rem;
+      font-family: var(--font);
+      line-height: 1.5;
+      max-height: 120px;
+      overflow-y: auto;
+      outline: none;
+      color: var(--color-text);
+    }
+    #msg-input:focus { border-color: var(--color-accent); }
+
+    #btn-image {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: var(--color-bg); border: 1px solid #C5D9E8;
+      font-size: 1.2rem; cursor: pointer; flex-shrink: 0;
+    }
+    #btn-image:hover { background: var(--color-accent-soft); }
+
+    #btn-send {
+      height: 42px; padding: 0 18px;
+      background: var(--color-accent); color: #fff;
+      border: none; border-radius: var(--radius);
+      font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; flex-shrink: 0;
+    }
+    #btn-send:hover { background: #1a6fa0; }
+    #btn-send:disabled { background: #A0C4DE; cursor: not-allowed; }
+
+    #file-input { display: none; }
+
+    /* ── 名前入力モーダル ── */
+    #modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #modal-overlay.active { display: flex; }
+    #modal {
+      background: var(--color-surface);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      width: min(90%, 360px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+    #modal h2 {
+      color: var(--color-primary);
+      font-size: 1.05rem;
+      margin-bottom: 6px;
+    }
+    #modal p { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 14px; }
+    #name-input {
+      width: 100%;
+      border: 1px solid #C5D9E8;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 1rem;
+      font-family: var(--font);
+      outline: none;
+      color: var(--color-text);
+      margin-bottom: 14px;
+    }
+    #name-input:focus { border-color: var(--color-accent); }
+    #btn-name-ok {
+      width: 100%;
+      background: var(--color-accent); color: #fff;
+      border: none; border-radius: 8px;
+      padding: 11px; font-size: 1rem; font-weight: 700;
+      cursor: pointer;
+    }
+    #btn-name-ok:hover { background: #1a6fa0; }
+    #modal-note {
+      font-size: 0.75rem; color: var(--color-muted);
+      margin-top: 10px; text-align: center;
+    }
+
+    /* ── KaTeX override ── */
+    .katex { font-size: 1em; }
+  </style>
+</head>
+<body>
+
+<!-- 名前入力モーダル -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>📚 はじめに名前を入力してね</h2>
+    <p>入力した名前は学習記録として保存されます</p>
+    <input id="name-input" type="text" placeholder="例：田中" maxlength="20" autocomplete="off">
+    <button id="btn-name-ok">スタート！</button>
+    <p id="modal-note">※ 入力した名前は先生に見えます</p>
+  </div>
+</div>
+
+<!-- ヘッダー -->
+<header>
+  <h1>🌊 進学塾 湊 質問AI</h1>
+  <div id="student-info">
+    <span id="student-name-disp"></span>
+    <button id="btn-rename">名前変更</button>
+  </div>
+</header>
+
+<!-- 注意バー -->
+<div id="warn-bar">
+  ⚠️ AIは間違えることもあります。わからないところは先生に質問してね！
+</div>
+
+<!-- チャット表示エリア -->
+<div id="chat-area"></div>
+
+<!-- 入力フォーム -->
+<div id="input-area">
+  <div id="image-preview-wrap">
+    <img id="image-preview-thumb" src="" alt="選択中の画像">
+    <button id="btn-remove-img" title="画像を外す">✕</button>
+  </div>
+  <div id="input-row">
+    <textarea id="msg-input" rows="1" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
+    <button id="btn-image" title="画像を添付">📷</button>
+    <button id="btn-send">送信</button>
+  </div>
+  <input id="file-input" type="file" accept="image/*" capture="environment">
+</div>
+
+<script>
+// ── 定数 ──
+const MAX_HISTORY = 6;
+const MAX_IMAGE_PX = 1600;
+
+// ── 状態 ──
+let history = [];
+let pendingImageBase64 = null;
+let pendingImageMimeType = null;
+let isSending = false;
+let katexReady = false;
+
+// ── KaTeX初期化 ──
+function initKaTeX() {
+  katexReady = true;
+  document.querySelectorAll('.model-bubble').forEach(renderKaTeX);
+}
+
+function renderKaTeX(el) {
+  if (!katexReady) return;
+  try {
+    renderMathInElement(el, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false }
+      ],
+      throwOnError: false
+    });
+  } catch(e) {}
+}
+
+// ── 名前管理 ──
+function getStudentName() { return localStorage.getItem('studentName') || ''; }
+function setStudentName(name) {
+  localStorage.setItem('studentName', name);
+  document.getElementById('student-name-disp').textContent = name + ' さん';
+}
+
+function showNameModal() {
+  document.getElementById('modal-overlay').classList.add('active');
+  document.getElementById('name-input').value = '';
+  setTimeout(() => document.getElementById('name-input').focus(), 100);
+}
+function hideNameModal() {
+  document.getElementById('modal-overlay').classList.remove('active');
+}
+
+document.getElementById('btn-name-ok').addEventListener('click', () => {
+  const name = document.getElementById('name-input').value.trim();
+  if (!name) { document.getElementById('name-input').focus(); return; }
+  setStudentName(name);
+  hideNameModal();
+  addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
+});
+
+document.getElementById('name-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-name-ok').click();
+});
+
+document.getElementById('btn-rename').addEventListener('click', showNameModal);
+
+// ── チャット表示 ──
+function addSystemMsg(text) {
+  const div = document.createElement('div');
+  div.style.cssText = 'text-align:center;font-size:0.8rem;color:var(--color-muted);padding:4px 0;';
+  div.textContent = text;
+  document.getElementById('chat-area').appendChild(div);
+  scrollBottom();
+}
+
+function addUserBubble(text, imageDataURL) {
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  const av = document.createElement('div');
+  av.className = 'avatar'; av.textContent = '👤';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  if (text) {
+    const p = document.createElement('p');
+    p.textContent = text;
+    bubble.appendChild(p);
+  }
+  if (imageDataURL) {
+    const img = document.createElement('img');
+    img.className = 'preview'; img.src = imageDataURL;
+    bubble.appendChild(img);
+  }
+  row.appendChild(bubble); row.appendChild(av);
+  document.getElementById('chat-area').appendChild(row);
+  scrollBottom();
+}
+
+function addLoadingBubble() {
+  const row = document.createElement('div');
+  row.className = 'msg-row model'; row.id = 'loading-row';
+  const av = document.createElement('div');
+  av.className = 'avatar'; av.textContent = '🤖';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  row.appendChild(av); row.appendChild(bubble);
+  document.getElementById('chat-area').appendChild(row);
+  scrollBottom();
+}
+
+function removeLoadingBubble() {
+  const el = document.getElementById('loading-row');
+  if (el) el.remove();
+}
+
+function addAIBubble(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row model';
+  const av = document.createElement('div');
+  av.className = 'avatar'; av.textContent = '🤖';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble model-bubble';
+
+  // XSS対策：テキストノードで安全に処理
+  // $...$や$$...$$はKaTeXが処理するためinnerHTMLが必要
+  // 改行を<br>に変換しつつ安全な形で描画
+  const lines = text.split('\n');
+  lines.forEach((line, i) => {
+    if (i > 0) bubble.appendChild(document.createElement('br'));
+    bubble.appendChild(document.createTextNode(line));
+  });
+
+  const footer = document.createElement('span');
+  footer.className = 'ai-footer';
+  footer.textContent = '※合っているか不安なときや、まだわからないときは先生に質問してね';
+  bubble.appendChild(document.createElement('br'));
+  bubble.appendChild(footer);
+
+  row.appendChild(av); row.appendChild(bubble);
+  document.getElementById('chat-area').appendChild(row);
+  renderKaTeX(bubble);
+  scrollBottom();
+}
+
+function addErrorBubble(msg) {
+  const row = document.createElement('div');
+  row.className = 'msg-row model';
+  const av = document.createElement('div');
+  av.className = 'avatar'; av.textContent = '⚠️';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.style.cssText = 'background:#FFF0E8;border-color:#F3C4A0;color:#8B3A0F;';
+  bubble.textContent = msg;
+  row.appendChild(av); row.appendChild(bubble);
+  document.getElementById('chat-area').appendChild(row);
+  scrollBottom();
+}
+
+function scrollBottom() {
+  const area = document.getElementById('chat-area');
+  area.scrollTop = area.scrollHeight;
+}
+
+// ── 画像処理 ──
+function resizeImage(file, maxPx) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxPx) {
+          if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+          else        { w = Math.round(w * maxPx / h); h = maxPx; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          const r2 = new FileReader();
+          r2.onload = (e2) => resolve({ dataURL: e2.target.result, mimeType: 'image/jpeg' });
+          r2.readAsDataURL(blob);
+        }, 'image/jpeg', 0.85);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('btn-image').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const { dataURL, mimeType } = await resizeImage(file, MAX_IMAGE_PX);
+  pendingImageBase64 = dataURL.split(',')[1];
+  pendingImageMimeType = mimeType;
+  document.getElementById('image-preview-thumb').src = dataURL;
+  document.getElementById('image-preview-wrap').classList.add('visible');
+  e.target.value = '';
+});
+
+document.getElementById('btn-remove-img').addEventListener('click', () => {
+  pendingImageBase64 = null;
+  pendingImageMimeType = null;
+  document.getElementById('image-preview-wrap').classList.remove('visible');
+  document.getElementById('image-preview-thumb').src = '';
+});
+
+// ── テキストエリア自動リサイズ ──
+const msgInput = document.getElementById('msg-input');
+msgInput.addEventListener('input', () => {
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+});
+
+// ── 送信 ──
+async function sendMessage() {
+  if (isSending) return;
+  const text = msgInput.value.trim();
+  if (!text && !pendingImageBase64) return;
+  const studentName = getStudentName();
+  if (!studentName) { showNameModal(); return; }
+
+  isSending = true;
+  document.getElementById('btn-send').disabled = true;
+
+  const imageDataURL = pendingImageBase64
+    ? 'data:' + pendingImageMimeType + ';base64,' + pendingImageBase64
+    : null;
+
+  addUserBubble(text, imageDataURL);
+  msgInput.value = '';
+  msgInput.style.height = 'auto';
+
+  const imgB64 = pendingImageBase64;
+  const imgMime = pendingImageMimeType;
+  pendingImageBase64 = null;
+  pendingImageMimeType = null;
+  document.getElementById('image-preview-wrap').classList.remove('visible');
+  document.getElementById('image-preview-thumb').src = '';
+
+  addLoadingBubble();
+
+  const histSlice = history.slice(-MAX_HISTORY);
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentName,
+        message: text,
+        imageBase64: imgB64 || null,
+        imageMimeType: imgMime || null,
+        history: histSlice
+      })
+    });
+
+    removeLoadingBubble();
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      addErrorBubble(errData.error || 'エラーが発生しました。もう一度試してね。');
+    } else {
+      const data = await res.json();
+      const reply = data.reply || '（回答を取得できませんでした）';
+      addAIBubble(reply);
+      if (text) history.push({ role: 'user', text });
+      history.push({ role: 'model', text: reply });
+    }
+  } catch(err) {
+    removeLoadingBubble();
+    addErrorBubble('通信エラーです。インターネット接続を確認してね。');
+  }
+
+  isSending = false;
+  document.getElementById('btn-send').disabled = false;
+  msgInput.focus();
+}
+
+document.getElementById('btn-send').addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// ── 初期化 ──
+(function init() {
+  const name = getStudentName();
+  if (!name) {
+    showNameModal();
+  } else {
+    setStudentName(name);
+    addSystemMsg('おかえり、' + name + ' さん！ 質問を入力してね 😊');
+  }
+})();
+</script>
+</body>
+</html>
