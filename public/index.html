@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>進学塾 湊 質問AI</title>
 
+  <!-- Google Fonts（ロゴと同じ明朝系：日本語=Shippori Mincho / 英語=Cormorant Garamond）-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Shippori+Mincho:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -23,7 +28,8 @@
       --color-muted:      #6B7B8A;
       --color-warn:       #C0712B;
       --radius: 14px;
-      --font: "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      /* ロゴと同じ明朝系フォント（英字=Cormorant Garamond、和文=Shippori Mincho）*/
+      --font: "Cormorant Garamond", "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,7 +54,11 @@
       justify-content: space-between;
       flex-shrink: 0;
     }
-    header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.03em; }
+    header h1 {
+      font-size: 1.1rem; font-weight: 700; letter-spacing: 0.03em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    header h1 img.brand-logo { height: 30px; width: auto; display: block; }
     #student-info { font-size: 0.82rem; opacity: 0.85; white-space: nowrap; }
     #btn-rename {
       background: none; border: 1px solid rgba(255,255,255,0.5);
@@ -261,7 +271,7 @@
 
 <!-- ヘッダー -->
 <header>
-  <h1>🌊 進学塾 湊 質問AI</h1>
+  <h1><img class="brand-logo" src="logo.png" alt="湊 ロゴ"> 進学塾 湊 質問AI</h1>
   <div id="student-info">
     <span id="student-name-disp"></span>
     <button id="btn-rename">名前変更</button>
