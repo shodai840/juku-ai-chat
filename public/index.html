@@ -332,9 +332,9 @@ function renderKaTeX(el) {
 }
 
 // ── 名前管理 ──
-function getStudentName() { return localStorage.getItem('studentName') || ''; }
+function getStudentName() { return sessionStorage.getItem('studentName') || ''; }
 function setStudentName(name) {
-  localStorage.setItem('studentName', name);
+  sessionStorage.setItem('studentName', name);
   document.getElementById('student-name-disp').textContent = name + ' さん';
 }
 
