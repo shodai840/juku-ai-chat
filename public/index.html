@@ -166,6 +166,21 @@
       background: none; border: none; cursor: pointer;
       font-size: 1.1rem; color: var(--color-muted);
     }
+    #quick-actions {
+      display: flex; gap: 8px; margin-bottom: 8px;
+    }
+    #btn-easier {
+      background: var(--color-accent-soft);
+      color: var(--color-primary);
+      border: 1px solid #C5D9E8;
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 0.82rem; font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+    }
+    #btn-easier:hover { background: #cfe6f5; }
+    #btn-easier:disabled { opacity: 0.5; cursor: not-allowed; }
     #input-row {
       display: flex; gap: 8px; align-items: flex-end;
     }
@@ -239,6 +254,24 @@
       margin-bottom: 14px;
     }
     #name-input:focus { border-color: var(--color-accent); }
+    .modal-label {
+      display: block;
+      font-size: 0.8rem; color: var(--color-muted);
+      margin-bottom: 4px;
+    }
+    #grade-select, #class-select {
+      width: 100%;
+      border: 1px solid #C5D9E8;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 1rem;
+      font-family: var(--font);
+      outline: none;
+      color: var(--color-text);
+      background: var(--color-surface);
+      margin-bottom: 14px;
+    }
+    #grade-select:focus, #class-select:focus { border-color: var(--color-accent); }
     #btn-name-ok {
       width: 100%;
       background: var(--color-accent); color: #fff;
@@ -264,8 +297,19 @@
     <h2>📚 はじめに名前を入力してね</h2>
     <p>入力した名前は学習記録として保存されます</p>
     <input id="name-input" type="text" placeholder="例：山田太郎" maxlength="20" autocomplete="off">
+    <label class="modal-label" for="grade-select">学年</label>
+    <select id="grade-select">
+      <option value="">学年をえらぶ</option>
+      <option value="中1">中1</option>
+      <option value="中2">中2</option>
+      <option value="中3">中3</option>
+    </select>
+    <label class="modal-label" for="class-select">クラス</label>
+    <select id="class-select">
+      <option value="">クラスをえらぶ</option>
+    </select>
     <button id="btn-name-ok">スタート！</button>
-    <p id="modal-note">※ 入力した名前は先生に見えます</p>
+    <p id="modal-note">※ 入力した名前・学年・クラスは先生に見えます</p>
   </div>
 </div>
 
@@ -291,6 +335,9 @@
   <div id="image-preview-wrap">
     <img id="image-preview-thumb" src="" alt="選択中の画像">
     <button id="btn-remove-img" title="画像を外す">✕</button>
+  </div>
+  <div id="quick-actions">
+    <button id="btn-easier" type="button">🍀 もっとやさしく説明して</button>
   </div>
   <div id="input-row">
     <textarea id="msg-input" rows="1" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
@@ -331,16 +378,42 @@ function renderKaTeX(el) {
   } catch(e) {}
 }
 
-// ── 名前管理 ──
-function getStudentName() { return sessionStorage.getItem('studentName') || ''; }
-function setStudentName(name) {
+// ── 名前・学年・クラス管理 ──
+function getStudentName()  { return sessionStorage.getItem('studentName')  || ''; }
+function getStudentGrade() { return sessionStorage.getItem('studentGrade') || ''; }
+function getStudentClass() { return sessionStorage.getItem('studentClass') || ''; }
+
+function setStudentInfo(name, grade, className) {
   sessionStorage.setItem('studentName', name);
-  document.getElementById('student-name-disp').textContent = name + ' さん';
+  sessionStorage.setItem('studentGrade', grade);
+  sessionStorage.setItem('studentClass', className);
+  document.getElementById('student-name-disp').textContent =
+    name + ' さん（' + grade + ' ' + className + '）';
 }
+
+// 学年に応じてクラスの選択肢を作り直す（Sクラスは中3だけ）
+function refreshClassOptions(selectedClass) {
+  const grade = document.getElementById('grade-select').value;
+  const classes = grade === '中3'
+    ? ['S（御三家志望）', 'A', 'B', '個別']
+    : ['A', 'B', '個別'];
+  const sel = document.getElementById('class-select');
+  sel.innerHTML = '<option value="">クラスをえらぶ</option>';
+  classes.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    if (c === selectedClass) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById('grade-select').addEventListener('change', () => refreshClassOptions());
 
 function showNameModal() {
   document.getElementById('modal-overlay').classList.add('active');
-  document.getElementById('name-input').value = '';
+  document.getElementById('name-input').value  = getStudentName();
+  document.getElementById('grade-select').value = getStudentGrade();
+  refreshClassOptions(getStudentClass());
   setTimeout(() => document.getElementById('name-input').focus(), 100);
 }
 function hideNameModal() {
@@ -348,9 +421,13 @@ function hideNameModal() {
 }
 
 document.getElementById('btn-name-ok').addEventListener('click', () => {
-  const name = document.getElementById('name-input').value.trim();
-  if (!name) { document.getElementById('name-input').focus(); return; }
-  setStudentName(name);
+  const name     = document.getElementById('name-input').value.trim();
+  const grade    = document.getElementById('grade-select').value;
+  const className = document.getElementById('class-select').value;
+  if (!name)      { document.getElementById('name-input').focus(); return; }
+  if (!grade)     { alert('学年をえらんでね'); return; }
+  if (!className) { alert('クラスをえらんでね'); return; }
+  setStudentInfo(name, grade, className);
   hideNameModal();
   addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
 });
@@ -519,8 +596,10 @@ async function sendMessage() {
   if (isSending) return;
   const text = msgInput.value.trim();
   if (!text && !pendingImageBase64) return;
-  const studentName = getStudentName();
-  if (!studentName) { showNameModal(); return; }
+  const studentName  = getStudentName();
+  const studentGrade = getStudentGrade();
+  const studentClass = getStudentClass();
+  if (!studentName || !studentGrade || !studentClass) { showNameModal(); return; }
 
   isSending = true;
   document.getElementById('btn-send').disabled = true;
@@ -550,6 +629,8 @@ async function sendMessage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         studentName,
+        studentGrade,
+        studentClass,
         message: text,
         imageBase64: imgB64 || null,
         imageMimeType: imgMime || null,
@@ -580,6 +661,19 @@ async function sendMessage() {
 }
 
 document.getElementById('btn-send').addEventListener('click', sendMessage);
+
+// 「もっとやさしく」ボタン：直前の説明をやさしく言い直してもらう
+document.getElementById('btn-easier').addEventListener('click', () => {
+  if (isSending) return;
+  const hasAIReply = history.some(h => h.role === 'model');
+  if (!hasAIReply) {
+    addSystemMsg('まずは質問してね。そのあとで「もっとやさしく」が使えるよ 😊');
+    return;
+  }
+  msgInput.value = 'さっきの説明が少しむずかしかったよ。小学生にもわかるくらい、もっとやさしく、もっと短く教えて。';
+  sendMessage();
+});
+
 msgInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -589,11 +683,13 @@ msgInput.addEventListener('keydown', (e) => {
 
 // ── 初期化 ──
 (function init() {
-  const name = getStudentName();
-  if (!name) {
+  const name  = getStudentName();
+  const grade = getStudentGrade();
+  const className = getStudentClass();
+  if (!name || !grade || !className) {
     showNameModal();
   } else {
-    setStudentName(name);
+    setStudentInfo(name, grade, className);
     addSystemMsg('おかえり、' + name + ' さん！ 質問を入力してね 😊');
   }
 })();
