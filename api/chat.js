@@ -153,7 +153,7 @@ export default async function handler(req, res) {
 
     if (geminiRes.status === 429) {
       return res.status(429).json({
-        error: '今混み合っています。少し待ってからもう一度試してね。'
+        error: '⏳ いま質問が集中していて、少し混み合っているみたい。1分くらい待ってから、もう一度送ってみてね。'
       });
     }
 
