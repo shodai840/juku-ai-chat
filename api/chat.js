@@ -73,6 +73,19 @@ function buildLevelInstruction(grade, className) {
   return `【この生徒について】\n- 学年：${g}\n- ${level}\n- 学年の範囲を超えた難しすぎる解法は避け、${g}が習う範囲のことばと方法で説明してください。`;
 }
 
+// ── 同一生徒の連続リクエスト制限（乱用防止：1分あたり8回まで）──
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = 8;
+const requestLog = new Map(); // studentName -> リクエスト時刻の配列
+
+function isRateLimited(key) {
+  const now = Date.now();
+  const timestamps = (requestLog.get(key) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+  timestamps.push(now);
+  requestLog.set(key, timestamps);
+  return timestamps.length > RATE_LIMIT_MAX;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -93,6 +106,12 @@ export default async function handler(req, res) {
   }
   if (!message && !imageBase64) {
     return res.status(400).json({ error: '質問か画像が必要です' });
+  }
+
+  if (isRateLimited(studentName)) {
+    return res.status(429).json({
+      error: '⏳ 質問が少し早すぎるみたい。1分くらい待ってから、もう一度送ってみてね。'
+    });
   }
 
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
