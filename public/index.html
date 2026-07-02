@@ -303,11 +303,14 @@
       <option value="中1">中1</option>
       <option value="中2">中2</option>
       <option value="中3">中3</option>
+      <option value="高校生">高校生</option>
     </select>
-    <label class="modal-label" for="class-select">クラス</label>
-    <select id="class-select">
-      <option value="">クラスをえらぶ</option>
-    </select>
+    <div id="class-field">
+      <label class="modal-label" for="class-select">クラス</label>
+      <select id="class-select">
+        <option value="">クラスをえらぶ</option>
+      </select>
+    </div>
     <button id="btn-name-ok">スタート！</button>
     <p id="modal-note">※ 入力した名前・学年・クラスは先生に見えます</p>
   </div>
@@ -384,17 +387,31 @@ function getStudentName()  { return sessionStorage.getItem('studentName')  || ''
 function getStudentGrade() { return sessionStorage.getItem('studentGrade') || ''; }
 function getStudentClass() { return sessionStorage.getItem('studentClass') || ''; }
 
+// 高校生かどうか（高校生はクラスなし）
+function isHighSchool(grade) { return (grade || '').startsWith('高'); }
+
 function setStudentInfo(name, grade, className) {
   sessionStorage.setItem('studentName', name);
   sessionStorage.setItem('studentGrade', grade);
   sessionStorage.setItem('studentClass', className);
-  document.getElementById('student-name-disp').textContent =
-    name + ' さん（' + grade + ' ' + className + '）';
+  document.getElementById('student-name-disp').textContent = className
+    ? name + ' さん（' + grade + ' ' + className + '）'
+    : name + ' さん（' + grade + '）';
 }
 
-// 学年に応じてクラスの選択肢を作り直す（Sクラスは中3だけ）
+// 学年に応じてクラス欄を作り直す（高校生は非表示、Sクラスは中3だけ）
 function refreshClassOptions(selectedClass) {
   const grade = document.getElementById('grade-select').value;
+  const classField = document.getElementById('class-field');
+
+  // 高校生はクラスなし → クラス欄を隠す
+  if (isHighSchool(grade)) {
+    classField.style.display = 'none';
+    document.getElementById('class-select').value = '';
+    return;
+  }
+  classField.style.display = '';
+
   const classes = grade === '中3'
     ? ['S（御三家志望）', 'A', 'B', '個別']
     : ['A', 'B', '個別'];
@@ -427,7 +444,7 @@ document.getElementById('btn-name-ok').addEventListener('click', () => {
   const className = document.getElementById('class-select').value;
   if (!name)      { document.getElementById('name-input').focus(); return; }
   if (!grade)     { alert('学年をえらんでね'); return; }
-  if (!className) { alert('クラスをえらんでね'); return; }
+  if (!isHighSchool(grade) && !className) { alert('クラスをえらんでね'); return; }
   setStudentInfo(name, grade, className);
   hideNameModal();
   addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
@@ -600,7 +617,8 @@ async function sendMessage() {
   const studentName  = getStudentName();
   const studentGrade = getStudentGrade();
   const studentClass = getStudentClass();
-  if (!studentName || !studentGrade || !studentClass) { showNameModal(); return; }
+  const classOk = isHighSchool(studentGrade) || studentClass;
+  if (!studentName || !studentGrade || !classOk) { showNameModal(); return; }
 
   isSending = true;
   document.getElementById('btn-send').disabled = true;
@@ -699,7 +717,8 @@ msgInput.addEventListener('keydown', (e) => {
   const name  = getStudentName();
   const grade = getStudentGrade();
   const className = getStudentClass();
-  if (!name || !grade || !className) {
+  const classOk = isHighSchool(grade) || className;
+  if (!name || !grade || !classOk) {
     showNameModal();
   } else {
     setStudentInfo(name, grade, className);
