@@ -4,9 +4,12 @@
 // =====================================================
 // 【使い方】
 // 1. Google スプレッドシートを新規作成し「質問ログ」と名前をつける
-// 2. 1行目にヘッダーを入力（A列〜J列）:
-//    日時 | 生徒名 | 質問 | 画像 | AI回答 | 入力Token | 出力Token | 合計Token | 学年 | クラス
-//    ※すでにH列まで使っている場合は、I1に「学年」、J1に「クラス」を追記するだけでOK
+// 2. 1行目にヘッダーを入力（A列〜K列）:
+//    日時 | 生徒名 | 質問 | 画像 | AI回答 | 入力Token | 出力Token | 合計Token | 本日の累計Token | 学年 | クラス
+//    ※すでにI列「学年」・J列「クラス」まで使っている場合は要注意：
+//      I列の左に列を1本「挿入」して「本日の累計Token」にし、既存の学年・クラスをJ・K列にずらす。
+//      （末尾にK列を追加するだけだと、既存の学年・クラス列とデータがずれるので注意）
+//    ※「本日の累計Token」は生徒ごとではなく、サイト全体（全生徒合計）のその日のトークン合計
 // 3. スプレッドシートのメニュー → 拡張機能 → Apps Script
 // 4. このコードを貼り付けて保存（Ctrl+S）
 // 5. デプロイ → 新しいデプロイ → 種類「ウェブアプリ」
@@ -27,7 +30,7 @@ function doPost(e) {
 
     // 1行目がヘッダーでなければ自動追加
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(['日時', '生徒名', '質問', '画像', 'AI回答', '入力Token', '出力Token', '合計Token', '学年', 'クラス']);
+      sheet.appendRow(['日時', '生徒名', '質問', '画像', 'AI回答', '入力Token', '出力Token', '合計Token', '本日の累計Token', '学年', 'クラス']);
     }
 
     sheet.appendRow([
@@ -39,9 +42,13 @@ function doPost(e) {
       data.promptTokenCount     || 0,
       data.candidatesTokenCount || 0,
       data.totalTokenCount      || 0,
+      '', // 本日の累計Token（この後 updateDailyCumulative() が書き込む）
       data.studentGrade         || '',
       data.studentClass         || ''
     ]);
+
+    // 本日（サイト全体）の累計トークン数を計算し、I列に記録
+    updateDailyCumulative();
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: 'ok' }))
@@ -53,6 +60,29 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// 本日（サイト全体・全生徒合計）の累計トークン数を計算し、最終行のI列に書き込む
+function updateDailyCumulative() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
+                || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return; // ヘッダーのみの場合は何もしない
+
+  const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  const timestamps  = sheet.getRange(2, 1, lastRow - 1, 1).getValues(); // A列: 日時
+  const totalTokens = sheet.getRange(2, 8, lastRow - 1, 1).getValues(); // H列: 合計Token
+
+  let sum = 0;
+  for (let i = 0; i < timestamps.length; i++) {
+    const ts = String(timestamps[i][0] || '');
+    if (ts.indexOf(todayStr) === 0) {
+      sum += Number(totalTokens[i][0]) || 0;
+    }
+  }
+
+  sheet.getRange(lastRow, 9).setValue(sum); // I列（9列目）
 }
 
 // テスト用（Apps Scriptエディタから手動実行できる）

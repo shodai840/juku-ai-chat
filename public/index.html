@@ -167,9 +167,9 @@
       font-size: 1.1rem; color: var(--color-muted);
     }
     #quick-actions {
-      display: flex; gap: 8px; margin-bottom: 8px;
+      display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
     }
-    #btn-easier {
+    #btn-easier, #btn-skip {
       background: var(--color-accent-soft);
       color: var(--color-primary);
       border: 1px solid #C5D9E8;
@@ -179,8 +179,8 @@
       font-family: var(--font);
       cursor: pointer;
     }
-    #btn-easier:hover { background: #cfe6f5; }
-    #btn-easier:disabled { opacity: 0.5; cursor: not-allowed; }
+    #btn-easier:hover, #btn-skip:hover { background: #cfe6f5; }
+    #btn-easier:disabled, #btn-skip:disabled { opacity: 0.5; cursor: not-allowed; }
     #input-row {
       display: flex; gap: 8px; align-items: flex-end;
     }
@@ -340,7 +340,8 @@
     <button id="btn-remove-img" title="画像を外す">✕</button>
   </div>
   <div id="quick-actions">
-    <button id="btn-easier" type="button">🍀 もっとやさしく説明して</button>
+    <button id="btn-easier" type="button">🍀 やさしく</button>
+    <button id="btn-skip" type="button">⏩ 次のステップ</button>
   </div>
   <div id="input-row">
     <textarea id="msg-input" rows="1" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
@@ -352,7 +353,7 @@
 
 <script>
 // ── 定数 ──
-const MAX_HISTORY = 6;
+const MAX_HISTORY = 14;
 const MAX_IMAGE_PX = 1600;
 
 // ── 状態 ──
@@ -689,6 +690,18 @@ document.getElementById('btn-easier').addEventListener('click', () => {
     return;
   }
   msgInput.value = 'さっきの説明が少しむずかしかったよ。小学生にもわかるくらい、もっとやさしく、もっと短く教えて。';
+  sendMessage();
+});
+
+// 「もうわかった、先へ」ボタン：分かっている説明を繰り返さず、手短に次へ進んでもらう
+document.getElementById('btn-skip').addEventListener('click', () => {
+  if (isSending) return;
+  const hasAIReply = history.some(h => h.role === 'model');
+  if (!hasAIReply) {
+    addSystemMsg('まずは質問してね。そのあとで「もうわかった、先へ」が使えるよ 😊');
+    return;
+  }
+  msgInput.value = 'ここまではもう分かったよ。同じような説明は繰り返さなくていいから、手短に次のステップへ進んで。';
   sendMessage();
 });
 
