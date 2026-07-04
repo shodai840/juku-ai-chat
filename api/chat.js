@@ -120,6 +120,9 @@ export default async function handler(req, res) {
   if (!message && !imageBase64) {
     return res.status(400).json({ error: '質問か画像が必要です' });
   }
+  if (typeof message === 'string' && message.length > 2000) {
+    return res.status(400).json({ error: '⚠️ 質問が長すぎるみたい。2000文字以内で送ってね。' });
+  }
 
   if (isRateLimited(studentName)) {
     return res.status(429).json({
