@@ -353,7 +353,7 @@
     <button id="btn-skip" type="button">⏩ 次のステップ</button>
   </div>
   <div id="input-row">
-    <textarea id="msg-input" rows="1" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
+    <textarea id="msg-input" rows="1" maxlength="2000" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
     <button id="btn-image" title="画像を添付">📷</button>
     <button id="btn-send">送信</button>
   </div>
@@ -366,6 +366,7 @@ const MAX_HISTORY = 14;
 const MAX_IMAGE_PX = 1600;
 
 // ── 状態 ──
+const HISTORY_KEY = 'chatHistory';
 let history = [];
 let pendingImageBase64 = null;
 let pendingImageMimeType = null;
@@ -398,6 +399,22 @@ function getStudentClass() { return sessionStorage.getItem('studentClass') || ''
 
 // 高校生かどうか（高校生はクラスなし）
 function isHighSchool(grade) { return (grade || '').startsWith('高'); }
+
+// ── 会話履歴の保存・復元（タブを閉じるまでは残る。閉じると次回は消える）──
+function saveHistory() {
+  try { sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (e) {}
+}
+function loadHistory() {
+  try {
+    const raw = sessionStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function clearHistory() {
+  history = [];
+  sessionStorage.removeItem(HISTORY_KEY);
+  document.getElementById('chat-area').innerHTML = '';
+}
 
 function setStudentInfo(name, grade, className) {
   sessionStorage.setItem('studentName', name);
@@ -454,9 +471,18 @@ document.getElementById('btn-name-ok').addEventListener('click', () => {
   if (!name)      { document.getElementById('name-input').focus(); return; }
   if (!grade)     { alert('学年をえらんでね'); return; }
   if (!isHighSchool(grade) && !className) { alert('クラスをえらんでね'); return; }
+
+  const isDifferentStudent = name !== getStudentName();
   setStudentInfo(name, grade, className);
   hideNameModal();
-  addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
+
+  if (isDifferentStudent) {
+    // 別の生徒に交代した可能性があるため、前の会話は残さない
+    clearHistory();
+    addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
+  } else {
+    addSystemMsg('学年・クラスを更新したよ！');
+  }
 });
 
 document.getElementById('name-input').addEventListener('keydown', (e) => {
@@ -677,6 +703,7 @@ async function sendMessage() {
       addAIBubble(reply);
       if (text) history.push({ role: 'user', text });
       history.push({ role: 'model', text: reply });
+      saveHistory();
     }
   } catch(err) {
     removeLoadingBubble();
@@ -731,7 +758,16 @@ msgInput.addEventListener('keydown', (e) => {
     showNameModal();
   } else {
     setStudentInfo(name, grade, className);
-    addSystemMsg('おかえり、' + name + ' さん！ 質問を入力してね 😊');
+    history = loadHistory();
+    if (history.length > 0) {
+      history.forEach(h => {
+        if (h.role === 'user') addUserBubble(h.text, null);
+        else if (h.role === 'model') addAIBubble(h.text);
+      });
+      addSystemMsg('おかえり、' + name + ' さん！ 続きから質問できるよ 😊');
+    } else {
+      addSystemMsg('おかえり、' + name + ' さん！ 質問を入力してね 😊');
+    }
   }
 })();
 </script>

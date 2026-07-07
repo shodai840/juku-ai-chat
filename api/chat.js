@@ -105,7 +105,7 @@ async function sendLog(payload) {
   }
 }
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', 'https://juku-ai-chat.vercel.app');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') {
@@ -121,6 +121,10 @@ export default async function handler(req, res) {
   if (!message && !imageBase64) {
     return res.status(400).json({ error: '質問か画像が必要です' });
   }
+  if (typeof message === 'string' && message.length > 2000) {
+    return res.status(400).json({ error: '⚠️ 質問が長すぎるみたい。2000文字以内で送ってね。' });
+  }
+
   if (isRateLimited(studentName)) {
     return res.status(429).json({
       error: '⏳ 質問が少し早すぎるみたい。1分くらい待ってから、もう一度送ってみてね。'
