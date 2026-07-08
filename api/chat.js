@@ -147,15 +147,20 @@ export default async function handler(req, res) {
     console.error('GEMINI_API_KEY が設定されていません');
     return res.status(500).json({ error: 'サーバー設定エラーです。管理者に連絡してください。' });
   }
+  // history はフロント（MAX_HISTORY=14, message上限2000文字）を信用しきらず、サーバー側でも同じ上限を適用する
+  const MAX_HISTORY_ENTRIES = 14;
+  const MAX_HISTORY_TEXT_LENGTH = 2000;
+
   const contents = [];
   if (Array.isArray(history)) {
-    for (const h of history) {
-      if (h.role === 'user' || h.role === 'model') {
-        contents.push({
-          role: h.role,
-          parts: [{ text: h.text || '' }]
-        });
-      }
+    const validEntries = history.filter(h => h && (h.role === 'user' || h.role === 'model'));
+    const trimmedEntries = validEntries.slice(-MAX_HISTORY_ENTRIES);
+    for (const h of trimmedEntries) {
+      const text = typeof h.text === 'string' ? h.text.slice(0, MAX_HISTORY_TEXT_LENGTH) : '';
+      contents.push({
+        role: h.role,
+        parts: [{ text }]
+      });
     }
   }
   const currentParts = [];
