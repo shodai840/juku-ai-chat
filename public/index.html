@@ -517,6 +517,7 @@ document.getElementById('btn-name-ok').addEventListener('click', () => {
     // 別の生徒に交代した可能性があるため、前の会話は残さない
     clearHistory();
     addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
+    addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
   } else {
     addSystemMsg('学年・クラスを更新したよ！');
   }
@@ -826,6 +827,7 @@ msgInput.addEventListener('keydown', (e) => {
       addSystemMsg('おかえり、' + name + ' さん！ 続きから質問できるよ 😊');
     } else {
       addSystemMsg('おかえり、' + name + ' さん！ 質問を入力してね 😊');
+      addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
     }
   }
 })();
