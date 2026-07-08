@@ -289,6 +289,12 @@
       cursor: pointer;
     }
     #btn-name-ok:hover { background: #1a6fa0; }
+    #modal-error {
+      display: none;
+      font-size: 0.82rem; color: var(--color-warn);
+      text-align: center; margin-bottom: 10px;
+    }
+    #modal-error.visible { display: block; }
     #modal-note {
       font-size: 0.75rem; color: var(--color-muted);
       margin-top: 10px; text-align: center;
@@ -320,6 +326,7 @@
         <option value="">クラスをえらぶ</option>
       </select>
     </div>
+    <p id="modal-error"></p>
     <button id="btn-name-ok">スタート！</button>
     <p id="modal-note">※ 入力した名前・学年・クラスは先生に見えます</p>
   </div>
@@ -453,11 +460,23 @@ function refreshClassOptions(selectedClass) {
 
 document.getElementById('grade-select').addEventListener('change', () => refreshClassOptions());
 
+function showModalError(msg) {
+  const el = document.getElementById('modal-error');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideModalError() {
+  const el = document.getElementById('modal-error');
+  el.textContent = '';
+  el.classList.remove('visible');
+}
+
 function showNameModal() {
   document.getElementById('modal-overlay').classList.add('active');
   document.getElementById('name-input').value  = getStudentName();
   document.getElementById('grade-select').value = getStudentGrade();
   refreshClassOptions(getStudentClass());
+  hideModalError();
   setTimeout(() => document.getElementById('name-input').focus(), 100);
 }
 function hideNameModal() {
@@ -468,9 +487,10 @@ document.getElementById('btn-name-ok').addEventListener('click', () => {
   const name     = document.getElementById('name-input').value.trim();
   const grade    = document.getElementById('grade-select').value;
   const className = document.getElementById('class-select').value;
-  if (!name)      { document.getElementById('name-input').focus(); return; }
-  if (!grade)     { alert('学年をえらんでね'); return; }
-  if (!isHighSchool(grade) && !className) { alert('クラスをえらんでね'); return; }
+  if (!name)      { showModalError('名前を入力してね'); document.getElementById('name-input').focus(); return; }
+  if (!grade)     { showModalError('学年をえらんでね'); return; }
+  if (!isHighSchool(grade) && !className) { showModalError('クラスをえらんでね'); return; }
+  hideModalError();
 
   const isDifferentStudent = name !== getStudentName();
   setStudentInfo(name, grade, className);
