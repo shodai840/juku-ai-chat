@@ -690,6 +690,33 @@ msgInput.addEventListener('input', () => {
   msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
 });
 
+// ── 一時的な通信エラー時の自動リトライ ──
+// 502（Geminiとの通信エラー）や、fetch自体が失敗した場合のみ対象。
+// 400（入力不備）・429（混雑・レート制限）は再送しても解決しないため対象外。
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+const RETRYABLE_STATUS = new Set([502]);
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1500;
+
+async function postChatWithRetry(payload) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === MAX_RETRIES) {
+        return res;
+      }
+    } catch (err) {
+      if (attempt === MAX_RETRIES) throw err;
+    }
+    await sleep(RETRY_DELAY_MS);
+  }
+}
+
 // ── 送信 ──
 async function sendMessage() {
   if (isSending) return;
@@ -724,18 +751,14 @@ async function sendMessage() {
   const histSlice = getContextHistory();
 
   try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        studentName,
-        studentGrade,
-        studentClass,
-        message: text,
-        imageBase64: imgB64 || null,
-        imageMimeType: imgMime || null,
-        history: histSlice
-      })
+    const res = await postChatWithRetry({
+      studentName,
+      studentGrade,
+      studentClass,
+      message: text,
+      imageBase64: imgB64 || null,
+      imageMimeType: imgMime || null,
+      history: histSlice
     });
 
     removeLoadingBubble();
