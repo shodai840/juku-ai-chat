@@ -178,7 +178,7 @@
     #quick-actions {
       display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
     }
-    #btn-easier, #btn-skip {
+    #btn-easier, #btn-skip, #btn-new-problem {
       background: var(--color-accent-soft);
       color: var(--color-primary);
       border: 1px solid #C5D9E8;
@@ -188,8 +188,15 @@
       font-family: var(--font);
       cursor: pointer;
     }
-    #btn-easier:hover, #btn-skip:hover { background: #cfe6f5; }
-    #btn-easier:disabled, #btn-skip:disabled { opacity: 0.5; cursor: not-allowed; }
+    #btn-easier:hover, #btn-skip:hover, #btn-new-problem:hover { background: #cfe6f5; }
+    #btn-easier:disabled, #btn-skip:disabled, #btn-new-problem:disabled { opacity: 0.5; cursor: not-allowed; }
+    .history-divider {
+      display: flex; align-items: center; gap: 8px;
+      margin: 4px 0; color: var(--color-muted); font-size: 0.78rem;
+    }
+    .history-divider::before, .history-divider::after {
+      content: ''; flex: 1; height: 1px; background: #D6E4F0;
+    }
     #input-row {
       display: flex; gap: 8px; align-items: flex-end;
     }
@@ -358,6 +365,7 @@
   <div id="quick-actions">
     <button id="btn-easier" type="button">🍀 やさしく</button>
     <button id="btn-skip" type="button">⏩ 次のステップ</button>
+    <button id="btn-new-problem" type="button">🆕 別の問題</button>
   </div>
   <div id="input-row">
     <textarea id="msg-input" rows="1" maxlength="2000" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
@@ -421,6 +429,15 @@ function clearHistory() {
   history = [];
   sessionStorage.removeItem(HISTORY_KEY);
   document.getElementById('chat-area').innerHTML = '';
+}
+
+// APIに送る分だけの履歴：直近の「区切り（別の問題）」より後ろだけを対象にする
+function getContextHistory() {
+  let startIdx = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === 'divider') { startIdx = i + 1; break; }
+  }
+  return history.slice(startIdx).slice(-MAX_HISTORY);
 }
 
 function setStudentInfo(name, grade, className) {
@@ -515,6 +532,14 @@ document.getElementById('btn-rename').addEventListener('click', showNameModal);
 function addSystemMsg(text) {
   const div = document.createElement('div');
   div.style.cssText = 'text-align:center;font-size:0.8rem;color:var(--color-muted);padding:4px 0;';
+  div.textContent = text;
+  document.getElementById('chat-area').appendChild(div);
+  scrollBottom();
+}
+
+function addDividerMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'history-divider';
   div.textContent = text;
   document.getElementById('chat-area').appendChild(div);
   scrollBottom();
@@ -695,7 +720,7 @@ async function sendMessage() {
 
   addLoadingBubble();
 
-  const histSlice = history.slice(-MAX_HISTORY);
+  const histSlice = getContextHistory();
 
   try {
     const res = await fetch('/api/chat', {
@@ -761,6 +786,19 @@ document.getElementById('btn-skip').addEventListener('click', () => {
   sendMessage();
 });
 
+// 「別の問題」ボタン：これまでの会話は画面に残したまま、AIに送る文脈だけ区切る
+document.getElementById('btn-new-problem').addEventListener('click', () => {
+  if (isSending) return;
+  const hasAIReply = history.some(h => h.role === 'model');
+  if (!hasAIReply) {
+    addSystemMsg('まずは質問してね。そのあとで「別の問題」が使えるよ 😊');
+    return;
+  }
+  history.push({ role: 'divider', text: '新しい問題' });
+  saveHistory();
+  addDividerMsg('新しい問題');
+});
+
 msgInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -783,6 +821,7 @@ msgInput.addEventListener('keydown', (e) => {
       history.forEach(h => {
         if (h.role === 'user') addUserBubble(h.text, null);
         else if (h.role === 'model') addAIBubble(h.text);
+        else if (h.role === 'divider') addDividerMsg(h.text);
       });
       addSystemMsg('おかえり、' + name + ' さん！ 続きから質問できるよ 😊');
     } else {
