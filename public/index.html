@@ -365,7 +365,7 @@
   <div id="quick-actions">
     <button id="btn-easier" type="button">🍀 やさしく</button>
     <button id="btn-skip" type="button">⏩ 次のステップ</button>
-    <button id="btn-new-problem" type="button">🆕 別の問題</button>
+    <button id="btn-new-problem" type="button">🆕 次の問題</button>
   </div>
   <div id="input-row">
     <textarea id="msg-input" rows="1" maxlength="2000" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
@@ -431,7 +431,7 @@ function clearHistory() {
   document.getElementById('chat-area').innerHTML = '';
 }
 
-// APIに送る分だけの履歴：直近の「区切り（別の問題）」より後ろだけを対象にする
+// APIに送る分だけの履歴：直近の「区切り（次の問題）」より後ろだけを対象にする
 function getContextHistory() {
   let startIdx = 0;
   for (let i = history.length - 1; i >= 0; i--) {
@@ -786,17 +786,17 @@ document.getElementById('btn-skip').addEventListener('click', () => {
   sendMessage();
 });
 
-// 「別の問題」ボタン：これまでの会話は画面に残したまま、AIに送る文脈だけ区切る
+// 「次の問題」ボタン：これまでの会話は画面に残したまま、AIに送る文脈だけ区切る
 document.getElementById('btn-new-problem').addEventListener('click', () => {
   if (isSending) return;
   const hasAIReply = history.some(h => h.role === 'model');
   if (!hasAIReply) {
-    addSystemMsg('まずは質問してね。そのあとで「別の問題」が使えるよ 😊');
+    addSystemMsg('まずは質問してね。そのあとで「次の問題」が使えるよ 😊');
     return;
   }
-  history.push({ role: 'divider', text: '新しい問題' });
+  history.push({ role: 'divider', text: '次の問題' });
   saveHistory();
-  addDividerMsg('新しい問題');
+  addDividerMsg('次の問題');
 });
 
 msgInput.addEventListener('keydown', (e) => {
