@@ -733,11 +733,22 @@ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 const RETRYABLE_STATUS = new Set([502]);
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
+const FETCH_TIMEOUT_MS = 25000; // 25秒応答がなければ打ち切る（無応答のままハングし続けるのを防ぐ）
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function postChatWithRetry(payload) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetchWithTimeout('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
