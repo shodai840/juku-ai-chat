@@ -125,6 +125,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '⚠️ 質問が長すぎるみたい。2000文字以内で送ってね。' });
   }
 
+  const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const MAX_IMAGE_BASE64_LENGTH = 4_000_000; // だいたい4MB相当（base64）
+
+  if (imageBase64) {
+    if (!ALLOWED_IMAGE_MIME_TYPES.includes(imageMimeType)) {
+      return res.status(400).json({ error: '⚠️ 対応していない画像形式みたい。写真（jpg/png）で送ってね。' });
+    }
+    if (typeof imageBase64 !== 'string' || imageBase64.length > MAX_IMAGE_BASE64_LENGTH) {
+      return res.status(400).json({ error: '⚠️ 画像のデータが重すぎるみたい。もう少し軽い画像で送ってね。' });
+    }
+  }
+
   if (isRateLimited(studentName)) {
     return res.status(429).json({
       error: '⏳ 質問が少し早すぎるみたい。1分くらい待ってから、もう一度送ってみてね。'
