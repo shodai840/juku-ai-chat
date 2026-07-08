@@ -140,6 +140,13 @@
       display: block; margin-top: 8px;
       font-size: 0.76rem; color: var(--color-muted);
     }
+    .bubble .ai-highlight {
+      background: var(--color-accent);
+      color: #fff;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
 
     /* ローディングドット */
     .loading-dots span {
@@ -586,6 +593,34 @@ function removeLoadingBubble() {
   if (el) el.remove();
 }
 
+// **太字** と ==ハイライト== だけを安全に要素化する（他はテキストノードのまま）
+function renderFormattedLine(line) {
+  const frag = document.createDocumentFragment();
+  const pattern = /\*\*(.+?)\*\*|==(.+?)==/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = pattern.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      frag.appendChild(document.createTextNode(line.slice(lastIndex, match.index)));
+    }
+    if (match[1] !== undefined) {
+      const strong = document.createElement('strong');
+      strong.textContent = match[1];
+      frag.appendChild(strong);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'ai-highlight';
+      span.textContent = match[2];
+      frag.appendChild(span);
+    }
+    lastIndex = pattern.lastIndex;
+  }
+  if (lastIndex < line.length) {
+    frag.appendChild(document.createTextNode(line.slice(lastIndex)));
+  }
+  return frag;
+}
+
 function addAIBubble(text) {
   const row = document.createElement('div');
   row.className = 'msg-row model';
@@ -594,13 +629,13 @@ function addAIBubble(text) {
   const bubble = document.createElement('div');
   bubble.className = 'bubble model-bubble';
 
-  // XSS対策：テキストノードで安全に処理
-  // $...$や$$...$$はKaTeXが処理するためinnerHTMLが必要
-  // 改行を<br>に変換しつつ安全な形で描画
+  // XSS対策：テキストノード・要素生成で安全に処理（innerHTMLは使わない）
+  // $...$や$$...$$はKaTeXが後段で処理する
+  // 改行を<br>に変換しつつ、**太字**・==ハイライト==だけ要素化して描画
   const lines = text.split('\n');
   lines.forEach((line, i) => {
     if (i > 0) bubble.appendChild(document.createElement('br'));
-    bubble.appendChild(document.createTextNode(line));
+    bubble.appendChild(renderFormattedLine(line));
   });
 
   const footer = document.createElement('span');
