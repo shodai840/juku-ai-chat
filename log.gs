@@ -63,6 +63,7 @@ function doPost(e) {
 }
 
 // 本日（サイト全体・全生徒合計）の累計トークン数を計算し、最終行のI列に書き込む
+// 全行を読み直すのではなく、直前の行だけを見て前回の累計に今回分を足す（行数が増えても処理時間は一定）
 function updateDailyCumulative() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                 || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -70,19 +71,18 @@ function updateDailyCumulative() {
   if (lastRow < 2) return; // ヘッダーのみの場合は何もしない
 
   const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const thisRowTokens = Number(sheet.getRange(lastRow, 8).getValue()) || 0; // H列: 今回の合計Token
 
-  const timestamps  = sheet.getRange(2, 1, lastRow - 1, 1).getValues(); // A列: 日時
-  const totalTokens = sheet.getRange(2, 8, lastRow - 1, 1).getValues(); // H列: 合計Token
-
-  let sum = 0;
-  for (let i = 0; i < timestamps.length; i++) {
-    const ts = String(timestamps[i][0] || '');
-    if (ts.indexOf(todayStr) === 0) {
-      sum += Number(totalTokens[i][0]) || 0;
+  let prevCumulative = 0;
+  if (lastRow > 2) {
+    const prevTimestamp = String(sheet.getRange(lastRow - 1, 1).getValue() || '');
+    if (prevTimestamp.indexOf(todayStr) === 0) {
+      prevCumulative = Number(sheet.getRange(lastRow - 1, 9).getValue()) || 0; // 直前行のI列（累計）
     }
+    // 直前行が今日でなければ（日をまたいだ）、今回分だけからスタート
   }
 
-  sheet.getRange(lastRow, 9).setValue(sum); // I列（9列目）
+  sheet.getRange(lastRow, 9).setValue(prevCumulative + thisRowTokens); // I列（9列目）
 }
 
 // テスト用（Apps Scriptエディタから手動実行できる）

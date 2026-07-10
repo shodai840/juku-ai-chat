@@ -140,6 +140,13 @@
       display: block; margin-top: 8px;
       font-size: 0.76rem; color: var(--color-muted);
     }
+    .bubble .ai-highlight {
+      background: var(--color-accent);
+      color: #fff;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
 
     /* ローディングドット */
     .loading-dots span {
@@ -178,7 +185,7 @@
     #quick-actions {
       display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
     }
-    #btn-easier, #btn-skip {
+    #btn-easier, #btn-skip, #btn-new-problem {
       background: var(--color-accent-soft);
       color: var(--color-primary);
       border: 1px solid #C5D9E8;
@@ -188,8 +195,15 @@
       font-family: var(--font);
       cursor: pointer;
     }
-    #btn-easier:hover, #btn-skip:hover { background: #cfe6f5; }
-    #btn-easier:disabled, #btn-skip:disabled { opacity: 0.5; cursor: not-allowed; }
+    #btn-easier:hover, #btn-skip:hover, #btn-new-problem:hover { background: #cfe6f5; }
+    #btn-easier:disabled, #btn-skip:disabled, #btn-new-problem:disabled { opacity: 0.5; cursor: not-allowed; }
+    .history-divider {
+      display: flex; align-items: center; gap: 8px;
+      margin: 4px 0; color: var(--color-muted); font-size: 0.78rem;
+    }
+    .history-divider::before, .history-divider::after {
+      content: ''; flex: 1; height: 1px; background: #D6E4F0;
+    }
     #input-row {
       display: flex; gap: 8px; align-items: flex-end;
     }
@@ -289,6 +303,12 @@
       cursor: pointer;
     }
     #btn-name-ok:hover { background: #1a6fa0; }
+    #modal-error {
+      display: none;
+      font-size: 0.82rem; color: var(--color-warn);
+      text-align: center; margin-bottom: 10px;
+    }
+    #modal-error.visible { display: block; }
     #modal-note {
       font-size: 0.75rem; color: var(--color-muted);
       margin-top: 10px; text-align: center;
@@ -320,6 +340,7 @@
         <option value="">クラスをえらぶ</option>
       </select>
     </div>
+    <p id="modal-error"></p>
     <button id="btn-name-ok">スタート！</button>
     <p id="modal-note">※ 入力した名前・学年・クラスは先生に見えます</p>
   </div>
@@ -351,6 +372,7 @@
   <div id="quick-actions">
     <button id="btn-easier" type="button">🍀 やさしく</button>
     <button id="btn-skip" type="button">⏩ 次のステップ</button>
+    <button id="btn-new-problem" type="button">🆕 次の問題</button>
   </div>
   <div id="input-row">
     <textarea id="msg-input" rows="1" maxlength="2000" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
@@ -416,6 +438,15 @@ function clearHistory() {
   document.getElementById('chat-area').innerHTML = '';
 }
 
+// APIに送る分だけの履歴：直近の「区切り（次の問題）」より後ろだけを対象にする
+function getContextHistory() {
+  let startIdx = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === 'divider') { startIdx = i + 1; break; }
+  }
+  return history.slice(startIdx).slice(-MAX_HISTORY);
+}
+
 function setStudentInfo(name, grade, className) {
   sessionStorage.setItem('studentName', name);
   sessionStorage.setItem('studentGrade', grade);
@@ -453,11 +484,23 @@ function refreshClassOptions(selectedClass) {
 
 document.getElementById('grade-select').addEventListener('change', () => refreshClassOptions());
 
+function showModalError(msg) {
+  const el = document.getElementById('modal-error');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideModalError() {
+  const el = document.getElementById('modal-error');
+  el.textContent = '';
+  el.classList.remove('visible');
+}
+
 function showNameModal() {
   document.getElementById('modal-overlay').classList.add('active');
   document.getElementById('name-input').value  = getStudentName();
   document.getElementById('grade-select').value = getStudentGrade();
   refreshClassOptions(getStudentClass());
+  hideModalError();
   setTimeout(() => document.getElementById('name-input').focus(), 100);
 }
 function hideNameModal() {
@@ -468,9 +511,10 @@ document.getElementById('btn-name-ok').addEventListener('click', () => {
   const name     = document.getElementById('name-input').value.trim();
   const grade    = document.getElementById('grade-select').value;
   const className = document.getElementById('class-select').value;
-  if (!name)      { document.getElementById('name-input').focus(); return; }
-  if (!grade)     { alert('学年をえらんでね'); return; }
-  if (!isHighSchool(grade) && !className) { alert('クラスをえらんでね'); return; }
+  if (!name)      { showModalError('名前を入力してね'); document.getElementById('name-input').focus(); return; }
+  if (!grade)     { showModalError('学年をえらんでね'); return; }
+  if (!isHighSchool(grade) && !className) { showModalError('クラスをえらんでね'); return; }
+  hideModalError();
 
   const isDifferentStudent = name !== getStudentName();
   setStudentInfo(name, grade, className);
@@ -480,6 +524,7 @@ document.getElementById('btn-name-ok').addEventListener('click', () => {
     // 別の生徒に交代した可能性があるため、前の会話は残さない
     clearHistory();
     addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
+    addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
   } else {
     addSystemMsg('学年・クラスを更新したよ！');
   }
@@ -495,6 +540,14 @@ document.getElementById('btn-rename').addEventListener('click', showNameModal);
 function addSystemMsg(text) {
   const div = document.createElement('div');
   div.style.cssText = 'text-align:center;font-size:0.8rem;color:var(--color-muted);padding:4px 0;';
+  div.textContent = text;
+  document.getElementById('chat-area').appendChild(div);
+  scrollBottom();
+}
+
+function addDividerMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'history-divider';
   div.textContent = text;
   document.getElementById('chat-area').appendChild(div);
   scrollBottom();
@@ -540,6 +593,34 @@ function removeLoadingBubble() {
   if (el) el.remove();
 }
 
+// **太字** と ==ハイライト== だけを安全に要素化する（他はテキストノードのまま）
+function renderFormattedLine(line) {
+  const frag = document.createDocumentFragment();
+  const pattern = /\*\*(.+?)\*\*|==(.+?)==/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = pattern.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      frag.appendChild(document.createTextNode(line.slice(lastIndex, match.index)));
+    }
+    if (match[1] !== undefined) {
+      const strong = document.createElement('strong');
+      strong.textContent = match[1];
+      frag.appendChild(strong);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'ai-highlight';
+      span.textContent = match[2];
+      frag.appendChild(span);
+    }
+    lastIndex = pattern.lastIndex;
+  }
+  if (lastIndex < line.length) {
+    frag.appendChild(document.createTextNode(line.slice(lastIndex)));
+  }
+  return frag;
+}
+
 function addAIBubble(text) {
   const row = document.createElement('div');
   row.className = 'msg-row model';
@@ -548,13 +629,13 @@ function addAIBubble(text) {
   const bubble = document.createElement('div');
   bubble.className = 'bubble model-bubble';
 
-  // XSS対策：テキストノードで安全に処理
-  // $...$や$$...$$はKaTeXが処理するためinnerHTMLが必要
-  // 改行を<br>に変換しつつ安全な形で描画
+  // XSS対策：テキストノード・要素生成で安全に処理（innerHTMLは使わない）
+  // $...$や$$...$$はKaTeXが後段で処理する
+  // 改行を<br>に変換しつつ、**太字**・==ハイライト==だけ要素化して描画
   const lines = text.split('\n');
   lines.forEach((line, i) => {
     if (i > 0) bubble.appendChild(document.createElement('br'));
-    bubble.appendChild(document.createTextNode(line));
+    bubble.appendChild(renderFormattedLine(line));
   });
 
   const footer = document.createElement('span');
@@ -644,6 +725,44 @@ msgInput.addEventListener('input', () => {
   msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
 });
 
+// ── 一時的な通信エラー時の自動リトライ ──
+// 502（Geminiとの通信エラー）や、fetch自体が失敗した場合のみ対象。
+// 400（入力不備）・429（混雑・レート制限）は再送しても解決しないため対象外。
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+const RETRYABLE_STATUS = new Set([502]);
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1500;
+const FETCH_TIMEOUT_MS = 25000; // 25秒応答がなければ打ち切る（無応答のままハングし続けるのを防ぐ）
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function postChatWithRetry(payload) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetchWithTimeout('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === MAX_RETRIES) {
+        return res;
+      }
+    } catch (err) {
+      if (attempt === MAX_RETRIES) throw err;
+    }
+    await sleep(RETRY_DELAY_MS);
+  }
+}
+
 // ── 送信 ──
 async function sendMessage() {
   if (isSending) return;
@@ -675,21 +794,17 @@ async function sendMessage() {
 
   addLoadingBubble();
 
-  const histSlice = history.slice(-MAX_HISTORY);
+  const histSlice = getContextHistory();
 
   try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        studentName,
-        studentGrade,
-        studentClass,
-        message: text,
-        imageBase64: imgB64 || null,
-        imageMimeType: imgMime || null,
-        history: histSlice
-      })
+    const res = await postChatWithRetry({
+      studentName,
+      studentGrade,
+      studentClass,
+      message: text,
+      imageBase64: imgB64 || null,
+      imageMimeType: imgMime || null,
+      history: histSlice
     });
 
     removeLoadingBubble();
@@ -741,6 +856,19 @@ document.getElementById('btn-skip').addEventListener('click', () => {
   sendMessage();
 });
 
+// 「次の問題」ボタン：これまでの会話は画面に残したまま、AIに送る文脈だけ区切る
+document.getElementById('btn-new-problem').addEventListener('click', () => {
+  if (isSending) return;
+  const hasAIReply = history.some(h => h.role === 'model');
+  if (!hasAIReply) {
+    addSystemMsg('まずは質問してね。そのあとで「次の問題」が使えるよ 😊');
+    return;
+  }
+  history.push({ role: 'divider', text: '次の問題' });
+  saveHistory();
+  addDividerMsg('次の問題');
+});
+
 msgInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -763,10 +891,12 @@ msgInput.addEventListener('keydown', (e) => {
       history.forEach(h => {
         if (h.role === 'user') addUserBubble(h.text, null);
         else if (h.role === 'model') addAIBubble(h.text);
+        else if (h.role === 'divider') addDividerMsg(h.text);
       });
       addSystemMsg('おかえり、' + name + ' さん！ 続きから質問できるよ 😊');
     } else {
       addSystemMsg('おかえり、' + name + ' さん！ 質問を入力してね 😊');
+      addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
     }
   }
 })();
