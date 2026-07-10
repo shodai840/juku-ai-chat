@@ -217,8 +217,34 @@ export default async function handler(req, res) {
         totalTokenCount: 0
       });
       if (geminiRes.status === 429) {
+        // エラー本文から「分あたり制限」か「日あたり制限」かを判別する
+        let quotaId = '';
+        let retryDelaySec = 0;
+        try {
+          const errJson = JSON.parse(errText);
+          for (const d of (errJson?.error?.details || [])) {
+            const type = String(d['@type'] || '');
+            if (type.includes('QuotaFailure')) {
+              quotaId = String(d?.violations?.[0]?.quotaId || '');
+            }
+            if (type.includes('RetryInfo') && d.retryDelay) {
+              retryDelaySec = Math.ceil(parseFloat(String(d.retryDelay).replace('s', ''))) || 0;
+            }
+          }
+        } catch (_) { /* 本文がJSONでない場合は無視 */ }
+
+        if (/PerDay/i.test(quotaId)) {
+          // 日あたり上限：待っても直らないのでリトライさせない
+          return res.status(429).json({
+            error: '⏳ 今日はAIへの質問が上限に達しちゃったみたい。また明日質問してね。急ぎのときは先生に直接聞いてね。',
+            limitType: 'daily'
+          });
+        }
+        // 分あたり制限（または不明）：待てば直るのでリトライ情報を返す
         return res.status(429).json({
-          error: '⏳ いま質問が集中していて、少し混み合っているみたい。1分くらい待ってから、もう一度送ってみてね。'
+          error: '⏳ いま質問が集中していて、少し混み合っているみたい。1分くらい待ってから、もう一度送ってみてね。',
+          limitType: 'minute',
+          retryAfterSec: retryDelaySec > 0 ? retryDelaySec : 45
         });
       }
       return res.status(502).json({

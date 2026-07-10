@@ -763,6 +763,34 @@ async function postChatWithRetry(payload) {
   }
 }
 
+// ── 429（混雑）時のカウントダウン付き自動再送 ──
+// リトライ待ちの間、生徒が続けて送信できないように入力欄・ボタンをすべてロックする
+function setInputsDisabled(disabled) {
+  document.getElementById('btn-send').disabled = disabled;
+  document.getElementById('msg-input').disabled = disabled;
+  document.getElementById('btn-image').disabled = disabled;
+  document.getElementById('btn-easier').disabled = disabled;
+  document.getElementById('btn-skip').disabled = disabled;
+  document.getElementById('btn-new-problem').disabled = disabled;
+}
+
+async function showRetryCountdown(sec) {
+  const row = document.createElement('div');
+  row.className = 'msg-row model';
+  const av = document.createElement('div');
+  av.className = 'avatar'; av.textContent = '⏳';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  row.appendChild(av); row.appendChild(bubble);
+  document.getElementById('chat-area').appendChild(row);
+  for (let s = sec; s > 0; s--) {
+    bubble.textContent = 'いま少し混み合ってるみたい。あと' + s + '秒したら、もう一度自動で送るね。そのまま待っててね…';
+    scrollBottom();
+    await sleep(1000);
+  }
+  row.remove();
+}
+
 // ── 送信 ──
 async function sendMessage() {
   if (isSending) return;
@@ -794,31 +822,56 @@ async function sendMessage() {
 
   addLoadingBubble();
 
-  const histSlice = getContextHistory();
+  const payload = {
+    studentName,
+    studentGrade,
+    studentClass,
+    message: text,
+    imageBase64: imgB64 || null,
+    imageMimeType: imgMime || null,
+    history: getContextHistory()
+  };
+
+  const handleSuccess = async (res) => {
+    const data = await res.json();
+    const reply = data.reply || '（回答を取得できませんでした）';
+    addAIBubble(reply);
+    if (text) history.push({ role: 'user', text });
+    history.push({ role: 'model', text: reply });
+    saveHistory();
+  };
 
   try {
-    const res = await postChatWithRetry({
-      studentName,
-      studentGrade,
-      studentClass,
-      message: text,
-      imageBase64: imgB64 || null,
-      imageMimeType: imgMime || null,
-      history: histSlice
-    });
+    const res = await postChatWithRetry(payload);
 
     removeLoadingBubble();
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      addErrorBubble(errData.error || 'エラーが発生しました。もう一度試してね。');
+    if (res.ok) {
+      await handleSuccess(res);
     } else {
-      const data = await res.json();
-      const reply = data.reply || '（回答を取得できませんでした）';
-      addAIBubble(reply);
-      if (text) history.push({ role: 'user', text });
-      history.push({ role: 'model', text: reply });
-      saveHistory();
+      const errData = await res.json().catch(() => ({}));
+      if (res.status === 429 && errData.retryAfterSec) {
+        // 分あたり制限（混雑）：カウントダウン後に1回だけ自動再送。
+        // その間は入力欄・ボタンをロックして、生徒が続けて送れないようにする
+        setInputsDisabled(true);
+        const waitSec = Math.min(errData.retryAfterSec, 90) + Math.floor(Math.random() * 5);
+        await showRetryCountdown(waitSec);
+        addLoadingBubble();
+        const res2 = await postChatWithRetry(payload);
+        removeLoadingBubble();
+        if (res2.ok) {
+          await handleSuccess(res2);
+        } else {
+          const errData2 = await res2.json().catch(() => ({}));
+          if (errData2.limitType === 'daily') {
+            addErrorBubble(errData2.error || '⏳ 今日はAIへの質問が上限に達しちゃったみたい。また明日質問してね。');
+          } else {
+            addErrorBubble('⏳ まだ混み合ってるみたい。少し時間をおいてから、もう一度送ってみてね。');
+          }
+        }
+      } else {
+        addErrorBubble(errData.error || 'エラーが発生しました。もう一度試してね。');
+      }
     }
   } catch(err) {
     removeLoadingBubble();
@@ -826,7 +879,7 @@ async function sendMessage() {
   }
 
   isSending = false;
-  document.getElementById('btn-send').disabled = false;
+  setInputsDisabled(false);
   msgInput.focus();
 }
 
