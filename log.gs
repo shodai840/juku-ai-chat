@@ -22,6 +22,19 @@
 const SHEET_NAME = 'Sheet1'; // シート名（変更した場合は合わせる）
 
 function doPost(e) {
+  // 生徒が同時に質問した場合、appendRowとupdateDailyCumulative()の間に
+  // 別のリクエストが割り込むと行がズレる（累計を違う行に書いてしまう）ことがあるため、
+  // この一連の処理が同時に1件しか実行されないようロックする。
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 最大10秒待つ
+  } catch (err) {
+    console.error('doPost lock timeout:', err);
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'error', message: 'サーバーが混み合っています（ロック取得失敗）' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   try {
     const data = JSON.parse(e.postData.contents);
 
@@ -59,6 +72,8 @@ function doPost(e) {
     return ContentService
       .createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
 }
 

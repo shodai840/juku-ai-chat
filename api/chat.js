@@ -1,6 +1,8 @@
 
 // api/chat.js  — Vercel Serverless Function
 // Gemini API中継 + Google Apps Scriptへログ送信
+import { waitUntil } from '@vercel/functions';
+
 const SYSTEM_PROMPT = `あなたは学習塾の生徒をサポートするAI家庭教師です。相手は小中高校生で、特に中学生が多いです。
 【最重要ルール】
 - 宿題やテストの答えを「丸ごと」教えてはいけません。代わりに、考え方・ヒント・次の一歩を示し、生徒が自分で答えにたどり着けるように導いてください。
@@ -203,8 +205,8 @@ export default async function handler(req, res) {
     if (!geminiRes.ok) {
       const errText = await geminiRes.text().catch(() => '');
       console.error('Gemini error:', geminiRes.status, errText);
-      // エラー内容もスプレッドシートに記録（原因調査用）
-      await sendLog({
+      // エラー内容もスプレッドシートに記録（原因調査用）。生徒への応答は待たせない
+      waitUntil(sendLog({
         timestamp: jstTimestamp(),
         studentName,
         studentGrade: studentGrade || '',
@@ -215,7 +217,7 @@ export default async function handler(req, res) {
         promptTokenCount: 0,
         candidatesTokenCount: 0,
         totalTokenCount: 0
-      });
+      }));
       if (geminiRes.status === 429) {
         // エラー本文から「分あたり制限」か「日あたり制限」かを判別する
         let quotaId = '';
@@ -260,8 +262,8 @@ export default async function handler(req, res) {
     };
   } catch (err) {
     console.error('Gemini fetch error:', err);
-    // 通信エラーも記録（原因調査用）
-    await sendLog({
+    // 通信エラーも記録（原因調査用）。生徒への応答は待たせない
+    waitUntil(sendLog({
       timestamp: jstTimestamp(),
       studentName,
       studentGrade: studentGrade || '',
@@ -272,13 +274,13 @@ export default async function handler(req, res) {
       promptTokenCount: 0,
       candidatesTokenCount: 0,
       totalTokenCount: 0
-    });
+    }));
     return res.status(500).json({
       error: 'AIとの通信でエラーが起きました。インターネット接続を確認してね。'
     });
   }
-  // ── 成功時のログ送信（await で完了を待つ。待たないと関数が先に終了してログが消える）──
-  await sendLog({
+  // ── 成功時のログ送信：waitUntil()でレスポンスを先に返し、ログはバックグラウンドで送る ──
+  waitUntil(sendLog({
     timestamp: jstTimestamp(),
     studentName,
     studentGrade: studentGrade || '',
@@ -289,6 +291,6 @@ export default async function handler(req, res) {
     promptTokenCount:     usage.promptTokenCount,
     candidatesTokenCount: usage.candidatesTokenCount,
     totalTokenCount:      usage.totalTokenCount
-  });
+  }));
   return res.status(200).json({ reply });
 }
