@@ -9,6 +9,7 @@
 //    ※既存シートの列順が違う場合は、Google Sheets上で列を手動で並び替えてから使うこと
 //      （このコードは常にA〜K列をこの順で扱うため、ズレたままだと違う列にデータが入る）
 //    ※「本日の累計Token」は生徒ごとではなく、サイト全体（全生徒合計）のその日のトークン合計
+//    ※フィードバック（👍/👎）用の「フィードバック」シートは、初回送信時に自動で作成されるので手動作成は不要
 // 3. スプレッドシートのメニュー → 拡張機能 → Apps Script
 // 4. このコードを貼り付けて保存（Ctrl+S）
 // 5. デプロイ → 新しいデプロイ → 種類「ウェブアプリ」
@@ -19,6 +20,7 @@
 // =====================================================
 
 const SHEET_NAME = 'Sheet1'; // シート名（変更した場合は合わせる）
+const FEEDBACK_SHEET_NAME = 'フィードバック'; // 生徒の👍👎を記録する専用シート（無ければ自動作成）
 
 function doPost(e) {
   // 生徒が同時に質問した場合、appendRowとupdateDailyCumulative()の間に
@@ -36,6 +38,10 @@ function doPost(e) {
 
   try {
     const data = JSON.parse(e.postData.contents);
+
+    if (data.type === 'feedback') {
+      return handleFeedback(data);
+    }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                   || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -74,6 +80,31 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// フィードバック（👍/👎）を専用シートに1行追記する（doPost内のロックの中から呼ばれる）
+function handleFeedback(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FEEDBACK_SHEET_NAME)
+                || SpreadsheetApp.getActiveSpreadsheet().insertSheet(FEEDBACK_SHEET_NAME);
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['日時', '学年', 'クラス', '生徒名', '評価', '科目', '生徒の質問', 'AI回答']);
+  }
+
+  sheet.appendRow([
+    data.timestamp    || '',
+    data.studentGrade || '',
+    data.studentClass || '',
+    data.studentName  || '',
+    data.feedback     || '',
+    data.subject      || '',
+    data.questionText || '',
+    data.aiReply      || ''
+  ]);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ status: 'ok' }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // 本日（サイト全体・全生徒合計）の累計トークン数を計算し、最終行のK列に書き込む
