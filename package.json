@@ -5,5 +5,8 @@
   "description": "進学塾 湊 質問AIチャット",
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@vercel/functions": "^3.7.5"
   }
 }

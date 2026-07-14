@@ -147,6 +147,23 @@
       border-radius: 4px;
       font-weight: 600;
     }
+    .feedback-row {
+      margin-top: 6px;
+      display: flex; gap: 6px; align-items: center;
+    }
+    .btn-feedback {
+      background: none;
+      border: 1px solid #C5D9E8;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      color: var(--color-muted);
+    }
+    .btn-feedback:hover { background: var(--color-bg); }
+    .feedback-thanks {
+      font-size: 0.78rem; color: var(--color-muted);
+    }
 
     /* ローディングドット */
     .loading-dots span {
@@ -621,7 +638,33 @@ function renderFormattedLine(line) {
   return frag;
 }
 
-function addAIBubble(text) {
+// AIの回答への👍👎フィードバックをサーバーに送る
+async function sendFeedback(feedback, questionText, aiReply, containerEl) {
+  containerEl.innerHTML = '';
+  const thanks = document.createElement('span');
+  thanks.className = 'feedback-thanks';
+  thanks.textContent = 'ありがとう！';
+  containerEl.appendChild(thanks);
+
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentName: getStudentName(),
+        studentGrade: getStudentGrade(),
+        studentClass: getStudentClass(),
+        feedback,
+        questionText: questionText || '',
+        aiReply: aiReply || ''
+      })
+    });
+  } catch (err) {
+    // 送れなくても生徒の体験には影響させない（静かに無視）
+  }
+}
+
+function addAIBubble(text, questionText) {
   const row = document.createElement('div');
   row.className = 'msg-row model';
   const av = document.createElement('div');
@@ -643,6 +686,18 @@ function addAIBubble(text) {
   footer.textContent = '※合っているか不安なときや、まだわからないときは先生に質問してね';
   bubble.appendChild(document.createElement('br'));
   bubble.appendChild(footer);
+
+  const feedbackRow = document.createElement('div');
+  feedbackRow.className = 'feedback-row';
+  const btnGood = document.createElement('button');
+  btnGood.type = 'button'; btnGood.className = 'btn-feedback'; btnGood.textContent = '👍';
+  const btnBad = document.createElement('button');
+  btnBad.type = 'button'; btnBad.className = 'btn-feedback'; btnBad.textContent = '👎';
+  feedbackRow.appendChild(btnGood);
+  feedbackRow.appendChild(btnBad);
+  btnGood.addEventListener('click', () => sendFeedback('good', questionText, text, feedbackRow));
+  btnBad.addEventListener('click', () => sendFeedback('bad', questionText, text, feedbackRow));
+  bubble.appendChild(feedbackRow);
 
   row.appendChild(av); row.appendChild(bubble);
   document.getElementById('chat-area').appendChild(row);
@@ -835,8 +890,9 @@ async function sendMessage() {
   const handleSuccess = async (res) => {
     const data = await res.json();
     const reply = data.reply || '（回答を取得できませんでした）';
-    addAIBubble(reply);
-    if (text) history.push({ role: 'user', text });
+    addAIBubble(reply, text);
+    // 画像のみ（テキストなし）の質問も、会話の文脈から欠落しないようプレースホルダーを積む
+    history.push({ role: 'user', text: text || '（画像で質問した）' });
     history.push({ role: 'model', text: reply });
     saveHistory();
   };
@@ -941,9 +997,10 @@ msgInput.addEventListener('keydown', (e) => {
     setStudentInfo(name, grade, className);
     history = loadHistory();
     if (history.length > 0) {
+      let lastUserText = '';
       history.forEach(h => {
-        if (h.role === 'user') addUserBubble(h.text, null);
-        else if (h.role === 'model') addAIBubble(h.text);
+        if (h.role === 'user') { addUserBubble(h.text, null); lastUserText = h.text; }
+        else if (h.role === 'model') addAIBubble(h.text, lastUserText);
         else if (h.role === 'divider') addDividerMsg(h.text);
       });
       addSystemMsg('おかえり、' + name + ' さん！ 続きから質問できるよ 😊');
