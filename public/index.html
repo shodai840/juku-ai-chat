@@ -891,7 +891,8 @@ async function sendMessage() {
     const data = await res.json();
     const reply = data.reply || '（回答を取得できませんでした）';
     addAIBubble(reply, text);
-    if (text) history.push({ role: 'user', text });
+    // 画像のみ（テキストなし）の質問も、会話の文脈から欠落しないようプレースホルダーを積む
+    history.push({ role: 'user', text: text || '（画像で質問した）' });
     history.push({ role: 'model', text: reply });
     saveHistory();
   };
