@@ -88,18 +88,20 @@ function handleFeedback(data) {
                 || SpreadsheetApp.getActiveSpreadsheet().insertSheet(FEEDBACK_SHEET_NAME);
 
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['日時', '学年', 'クラス', '生徒名', '評価', '科目', '生徒の質問', 'AI回答']);
+    sheet.appendRow(['日時', '学年', 'クラス', '生徒名', '評価', '科目', '生徒の質問', 'AI回答', '入力Token', '出力Token']);
   }
 
   sheet.appendRow([
-    data.timestamp    || '',
-    data.studentGrade || '',
-    data.studentClass || '',
-    data.studentName  || '',
-    data.feedback     || '',
-    data.subject      || '',
-    data.questionText || '',
-    data.aiReply      || ''
+    data.timestamp             || '',
+    data.studentGrade          || '',
+    data.studentClass          || '',
+    data.studentName           || '',
+    data.feedback              || '',
+    data.subject                || '',
+    data.questionText           || '',
+    data.aiReply                 || '',
+    data.promptTokenCount      || 0,
+    data.candidatesTokenCount  || 0
   ]);
 
   return ContentService

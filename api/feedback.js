@@ -21,9 +21,10 @@ function isRateLimited(key) {
   return timestamps.length > RATE_LIMIT_MAX;
 }
 
-// 質問文から教科を1語で判定する（判定できなければ「不明」）
+// 質問文から教科を1語で判定する（判定できなければ「不明」）。トークン数も一緒に返す
 async function classifySubject(questionText, GEMINI_API_KEY) {
-  if (!questionText) return '不明';
+  const emptyUsage = { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
+  if (!questionText) return { subject: '不明', usage: emptyUsage };
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -39,13 +40,18 @@ async function classifySubject(questionText, GEMINI_API_KEY) {
         })
       }
     );
-    if (!res.ok) return '不明';
+    if (!res.ok) return { subject: '不明', usage: emptyUsage };
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '不明';
-    return text.slice(0, 10);
+    const usage = {
+      promptTokenCount:     data?.usageMetadata?.promptTokenCount     || 0,
+      candidatesTokenCount: data?.usageMetadata?.candidatesTokenCount || 0,
+      totalTokenCount:      data?.usageMetadata?.totalTokenCount      || 0
+    };
+    return { subject: text.slice(0, 10), usage };
   } catch (err) {
     console.error('科目判定エラー:', err);
-    return '不明';
+    return { subject: '不明', usage: emptyUsage };
   }
 }
 
@@ -98,7 +104,9 @@ export default async function handler(req, res) {
 
   // 科目判定・ログ送信とも生徒の応答を待たせず、バックグラウンドで行う
   waitUntil((async () => {
-    const subject = GEMINI_API_KEY ? await classifySubject(safeQuestion, GEMINI_API_KEY) : '不明';
+    const { subject, usage } = GEMINI_API_KEY
+      ? await classifySubject(safeQuestion, GEMINI_API_KEY)
+      : { subject: '不明', usage: { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 } };
     await sendFeedbackLog({
       type: 'feedback',
       timestamp: jstTimestamp(),
@@ -108,7 +116,10 @@ export default async function handler(req, res) {
       feedback: feedback === 'good' ? '👍' : '👎',
       subject,
       questionText: safeQuestion,
-      aiReply: safeReply
+      aiReply: safeReply,
+      promptTokenCount:     usage.promptTokenCount,
+      candidatesTokenCount: usage.candidatesTokenCount,
+      totalTokenCount:      usage.totalTokenCount
     });
   })());
 
