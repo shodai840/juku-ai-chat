@@ -66,7 +66,8 @@ async function sendFeedbackLog(payload) {
     const logRes = await fetch(LOG_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      // log.gs側でLOG_SHARED_SECRETが設定されるまでは無視される（後方互換）
+      body: JSON.stringify({ ...payload, secret: process.env.LOG_SHARED_SECRET || '' }),
       redirect: 'follow'
     });
     console.log('フィードバックログ送信ステータス:', logRes.status);

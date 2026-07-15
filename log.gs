@@ -22,6 +22,16 @@
 const SHEET_NAME = 'Sheet1'; // シート名（変更した場合は合わせる）
 const FEEDBACK_SHEET_NAME = 'フィードバック'; // 生徒の👍👎を記録する専用シート（無ければ自動作成）
 
+// ── 共有シークレット（任意）──
+// このWebアプリのURLを知っていれば誰でもPOSTできてしまう問題への対処。
+// 「プロジェクトの設定」→「スクリプト プロパティ」に LOG_SHARED_SECRET を追加すると、
+// 一致しないPOSTを拒否するようになる（未設定の間は今まで通り誰からでも受け付ける＝後方互換）。
+// これによりVercel側（api/chat.js等）が先にシークレットを送るようになってから、
+// こちらのプロパティを設定するだけで有効化でき、コードの再デプロイなしで切り替えられる。
+function getRequiredSecret() {
+  return PropertiesService.getScriptProperties().getProperty('LOG_SHARED_SECRET') || '';
+}
+
 function doPost(e) {
   // 生徒が同時に質問した場合、appendRowとupdateDailyCumulative()の間に
   // 別のリクエストが割り込むと行がズレる（累計を違う行に書いてしまう）ことがあるため、
@@ -38,6 +48,14 @@ function doPost(e) {
 
   try {
     const data = JSON.parse(e.postData.contents);
+
+    const requiredSecret = getRequiredSecret();
+    if (requiredSecret && data.secret !== requiredSecret) {
+      console.error('doPost: シークレット不一致のため拒否');
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'error', message: 'unauthorized' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (data.type === 'feedback') {
       return handleFeedback(data);
