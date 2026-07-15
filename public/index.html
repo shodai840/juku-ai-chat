@@ -333,6 +333,12 @@
 
     /* ── KaTeX override ── */
     .katex { font-size: 1em; }
+    /* 長い数式（$$...$$）が吹き出しからはみ出さないよう、数式部分だけ横スクロールにする */
+    .katex-display {
+      overflow-x: auto;
+      overflow-y: hidden;
+      max-width: 100%;
+    }
   </style>
 </head>
 <body>
