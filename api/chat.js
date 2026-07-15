@@ -2,6 +2,7 @@
 // api/chat.js  — Vercel Serverless Function
 // Gemini API中継 + Google Apps Scriptへログ送信
 import { waitUntil } from '@vercel/functions';
+import { verifyAuth } from '../lib/auth/verifyAuth.js';
 
 const SYSTEM_PROMPT = `あなたは学習塾の生徒をサポートするAI家庭教師です。相手は小中高校生で、特に中学生が多いです。
 【最重要ルール】
@@ -119,10 +120,12 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  const { studentName, studentGrade, studentClass, message, imageBase64, imageMimeType, history } = req.body || {};
-  if (!studentName || typeof studentName !== 'string') {
-    return res.status(400).json({ error: '生徒名が必要です' });
+  const student = await verifyAuth(req);
+  if (!student) {
+    return res.status(401).json({ error: 'ログインが必要です。もう一度ログインしてね。' });
   }
+  const studentName = student.name;
+  const { studentGrade, studentClass, message, imageBase64, imageMimeType, history } = req.body || {};
   if (!message && !imageBase64) {
     return res.status(400).json({ error: '質問か画像が必要です' });
   }

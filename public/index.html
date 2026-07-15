@@ -68,13 +68,13 @@
     #student-name-disp {
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; /* 長い名前は「…」で省略 */
     }
-    #btn-rename {
+    #btn-rename, #btn-logout {
       background: none; border: 1px solid rgba(255,255,255,0.5);
       color: #fff; border-radius: 20px; padding: 2px 10px;
       font-size: 0.75rem; cursor: pointer; margin-left: 8px;
       flex-shrink: 0; /* ボタンは縮めない */
     }
-    #btn-rename:hover { background: rgba(255,255,255,0.15); }
+    #btn-rename:hover, #btn-logout:hover { background: rgba(255,255,255,0.15); }
 
     /* ── 注意バー ── */
     #warn-bar {
@@ -259,8 +259,8 @@
 
     #file-input { display: none; }
 
-    /* ── 名前入力モーダル ── */
-    #modal-overlay {
+    /* ── モーダル共通（認証モーダル・学年クラスモーダル）── */
+    #auth-overlay, #modal-overlay {
       display: none;
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.45);
@@ -268,21 +268,21 @@
       align-items: center;
       justify-content: center;
     }
-    #modal-overlay.active { display: flex; }
-    #modal {
+    #auth-overlay.active, #modal-overlay.active { display: flex; }
+    #auth-modal, #modal {
       background: var(--color-surface);
       border-radius: var(--radius);
       padding: 28px 24px;
       width: min(90%, 360px);
       box-shadow: 0 8px 32px rgba(0,0,0,0.18);
     }
-    #modal h2 {
+    #auth-modal h2, #modal h2 {
       color: var(--color-primary);
       font-size: 1.05rem;
       margin-bottom: 6px;
     }
-    #modal p { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 14px; }
-    #name-input {
+    #auth-modal p, #modal p { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 14px; }
+    .auth-input {
       width: 100%;
       border: 1px solid #C5D9E8;
       border-radius: 8px;
@@ -293,7 +293,37 @@
       color: var(--color-text);
       margin-bottom: 14px;
     }
-    #name-input:focus { border-color: var(--color-accent); }
+    .auth-input:focus { border-color: var(--color-accent); }
+
+    /* ── 認証モーダル（ログイン・新規登録）── */
+    #auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .auth-tab {
+      flex: 1; padding: 8px; border: 1px solid #C5D9E8; border-radius: 8px;
+      background: var(--color-surface); color: var(--color-muted);
+      font-family: var(--font); font-size: 0.9rem; font-weight: 700; cursor: pointer;
+    }
+    .auth-tab.active { background: var(--color-accent-soft); color: var(--color-primary); border-color: var(--color-accent); }
+    .auth-btn {
+      width: 100%;
+      background: var(--color-accent); color: #fff;
+      border: none; border-radius: 8px;
+      padding: 11px; font-size: 1rem; font-weight: 700;
+      cursor: pointer;
+    }
+    .auth-btn:hover { background: #1a6fa0; }
+    .auth-btn:disabled { background: #A0C4DE; cursor: not-allowed; }
+    .auth-error {
+      display: none;
+      font-size: 0.82rem; color: var(--color-warn);
+      text-align: center; margin-bottom: 10px;
+    }
+    .auth-error.visible { display: block; }
+    .auth-success {
+      display: none;
+      font-size: 0.82rem; color: var(--color-ok, #2E8B57);
+      text-align: center; margin-bottom: 10px;
+    }
+    .auth-success.visible { display: block; }
     .modal-label {
       display: block;
       font-size: 0.8rem; color: var(--color-muted);
@@ -343,12 +373,36 @@
 </head>
 <body>
 
-<!-- 名前入力モーダル -->
+<!-- ログイン・新規登録モーダル -->
+<div id="auth-overlay">
+  <div id="auth-modal">
+    <h2>📚 進学塾 湊 質問AI</h2>
+    <div id="auth-tabs">
+      <button type="button" id="tab-login" class="auth-tab active">ログイン</button>
+      <button type="button" id="tab-register" class="auth-tab">新規登録</button>
+    </div>
+    <div id="login-pane">
+      <input id="login-name-input" class="auth-input" type="text" placeholder="名前" maxlength="50" autocomplete="username">
+      <input id="login-password-input" class="auth-input" type="password" placeholder="パスワード" autocomplete="current-password">
+      <p id="login-error" class="auth-error"></p>
+      <button type="button" id="btn-login-submit" class="auth-btn">ログイン</button>
+    </div>
+    <div id="register-pane" style="display:none">
+      <p>先生の承認が完了するまでは使えません</p>
+      <input id="register-name-input" class="auth-input" type="text" placeholder="名前（例：山田太郎）" maxlength="50" autocomplete="username">
+      <input id="register-password-input" class="auth-input" type="password" placeholder="パスワード（4文字以上）" autocomplete="new-password">
+      <p id="register-error" class="auth-error"></p>
+      <p id="register-success" class="auth-success"></p>
+      <button type="button" id="btn-register-submit" class="auth-btn">登録する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 学年・クラス入力モーダル -->
 <div id="modal-overlay">
   <div id="modal">
-    <h2>📚 はじめに名前を入力してね</h2>
-    <p>入力した名前は学習記録として保存されます</p>
-    <input id="name-input" type="text" placeholder="例：山田太郎" maxlength="20" autocomplete="off">
+    <h2>📚 学年・クラスを教えてね</h2>
+    <p>入力した学年・クラスは先生に見えます</p>
     <label class="modal-label" for="grade-select">学年</label>
     <select id="grade-select">
       <option value="">学年をえらぶ</option>
@@ -365,7 +419,7 @@
     </div>
     <p id="modal-error"></p>
     <button id="btn-name-ok">スタート！</button>
-    <p id="modal-note">※ 入力した名前・学年・クラスは先生に見えます</p>
+    <p id="modal-note">※ 入力した学年・クラスは先生に見えます</p>
   </div>
 </div>
 
@@ -374,7 +428,8 @@
   <h1><img class="brand-logo" src="logo.png" alt="湊 ロゴ"> 進学塾 湊 質問AI</h1>
   <div id="student-info">
     <span id="student-name-disp"></span>
-    <button id="btn-rename">名前変更</button>
+    <button id="btn-rename">学年・クラス変更</button>
+    <button id="btn-logout">ログアウト</button>
   </div>
 </header>
 
@@ -441,6 +496,11 @@ function renderKaTeX(el) {
 function getStudentName()  { return sessionStorage.getItem('studentName')  || ''; }
 function getStudentGrade() { return sessionStorage.getItem('studentGrade') || ''; }
 function getStudentClass() { return sessionStorage.getItem('studentClass') || ''; }
+
+// ── ログイン認証（JWT）管理 ──
+function getAuthToken()   { return sessionStorage.getItem('authToken') || ''; }
+function setAuthToken(t)  { sessionStorage.setItem('authToken', t); }
+function clearAuthToken() { sessionStorage.removeItem('authToken'); }
 
 // 高校生かどうか（高校生はクラスなし）
 function isHighSchool(grade) { return (grade || '').startsWith('高'); }
@@ -518,46 +578,182 @@ function hideModalError() {
   el.classList.remove('visible');
 }
 
-function showNameModal() {
+function showGradeModal() {
   document.getElementById('modal-overlay').classList.add('active');
-  document.getElementById('name-input').value  = getStudentName();
   document.getElementById('grade-select').value = getStudentGrade();
   refreshClassOptions(getStudentClass());
   hideModalError();
-  setTimeout(() => document.getElementById('name-input').focus(), 100);
 }
-function hideNameModal() {
+function hideGradeModal() {
   document.getElementById('modal-overlay').classList.remove('active');
 }
 
 document.getElementById('btn-name-ok').addEventListener('click', () => {
-  const name     = document.getElementById('name-input').value.trim();
   const grade    = document.getElementById('grade-select').value;
   const className = document.getElementById('class-select').value;
-  if (!name)      { showModalError('名前を入力してね'); document.getElementById('name-input').focus(); return; }
   if (!grade)     { showModalError('学年をえらんでね'); return; }
   if (!isHighSchool(grade) && !className) { showModalError('クラスをえらんでね'); return; }
   hideModalError();
 
-  const isDifferentStudent = name !== getStudentName();
-  setStudentInfo(name, grade, className);
-  hideNameModal();
+  const isFirstTime = !getStudentGrade();
+  setStudentInfo(getStudentName(), grade, className);
+  hideGradeModal();
 
-  if (isDifferentStudent) {
-    // 別の生徒に交代した可能性があるため、前の会話は残さない
-    clearHistory();
-    addSystemMsg('こんにちは、' + name + ' さん！ 質問を気軽に入力してね 😊');
+  if (isFirstTime) {
+    addSystemMsg('こんにちは、' + getStudentName() + ' さん！ 質問を気軽に入力してね 😊');
     addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
   } else {
     addSystemMsg('学年・クラスを更新したよ！');
   }
 });
 
-document.getElementById('name-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('btn-name-ok').click();
-});
+document.getElementById('btn-rename').addEventListener('click', showGradeModal);
 
-document.getElementById('btn-rename').addEventListener('click', showNameModal);
+// ── ログイン・新規登録モーダル ──
+function showAuthModal() {
+  document.getElementById('auth-overlay').classList.add('active');
+}
+function hideAuthModal() {
+  document.getElementById('auth-overlay').classList.remove('active');
+}
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('tab-login').classList.toggle('active', isLogin);
+  document.getElementById('tab-register').classList.toggle('active', !isLogin);
+  document.getElementById('login-pane').style.display = isLogin ? 'block' : 'none';
+  document.getElementById('register-pane').style.display = isLogin ? 'none' : 'block';
+}
+document.getElementById('tab-login').addEventListener('click', () => switchAuthTab('login'));
+document.getElementById('tab-register').addEventListener('click', () => switchAuthTab('register'));
+
+function showAuthError(elId, msg) {
+  const el = document.getElementById(elId);
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideAuthError(elId) {
+  const el = document.getElementById(elId);
+  el.textContent = '';
+  el.classList.remove('visible');
+}
+
+// ログイン成功後、学年・クラスが未入力ならそちらのモーダルへ、入力済みならそのままチャットを再開する
+function afterLogin() {
+  const grade = getStudentGrade();
+  const className = getStudentClass();
+  const classOk = isHighSchool(grade) || className;
+  if (!grade || !classOk) {
+    showGradeModal();
+    return;
+  }
+  setStudentInfo(getStudentName(), grade, className);
+  history = loadHistory();
+  if (history.length > 0) {
+    let lastUserText = '';
+    history.forEach(h => {
+      if (h.role === 'user') { addUserBubble(h.text, null); lastUserText = h.text; }
+      else if (h.role === 'model') addAIBubble(h.text, lastUserText);
+      else if (h.role === 'divider') addDividerMsg(h.text);
+    });
+    addSystemMsg('おかえり、' + getStudentName() + ' さん！ 続きから質問できるよ 😊');
+  } else {
+    addSystemMsg('おかえり、' + getStudentName() + ' さん！ 質問を入力してね 😊');
+    addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
+  }
+}
+
+async function handleLogin() {
+  const name = document.getElementById('login-name-input').value.trim();
+  const password = document.getElementById('login-password-input').value;
+  hideAuthError('login-error');
+  if (!name || !password) { showAuthError('login-error', '名前とパスワードを入力してね'); return; }
+
+  const btn = document.getElementById('btn-login-submit');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showAuthError('login-error', data.error || 'ログインに失敗しました');
+      return;
+    }
+    setAuthToken(data.token);
+    sessionStorage.setItem('studentName', data.name);
+    document.getElementById('login-password-input').value = '';
+    hideAuthModal();
+    afterLogin();
+  } catch (err) {
+    showAuthError('login-error', '通信エラーが起きました。もう一度試してね。');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function handleRegister() {
+  const name = document.getElementById('register-name-input').value.trim();
+  const password = document.getElementById('register-password-input').value;
+  hideAuthError('register-error');
+  document.getElementById('register-success').classList.remove('visible');
+  if (!name || !password) { showAuthError('register-error', '名前とパスワードを入力してね'); return; }
+
+  const btn = document.getElementById('btn-register-submit');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showAuthError('register-error', data.error || '登録に失敗しました');
+      return;
+    }
+    const successEl = document.getElementById('register-success');
+    successEl.textContent = data.message || '登録を受け付けました。先生の承認をお待ちください。';
+    successEl.classList.add('visible');
+    document.getElementById('register-name-input').value = '';
+    document.getElementById('register-password-input').value = '';
+  } catch (err) {
+    showAuthError('register-error', '通信エラーが起きました。もう一度試してね。');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('btn-login-submit').addEventListener('click', handleLogin);
+document.getElementById('btn-register-submit').addEventListener('click', handleRegister);
+document.getElementById('login-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+document.getElementById('login-password-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+document.getElementById('register-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleRegister(); });
+document.getElementById('register-password-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleRegister(); });
+
+// トークンが無効・失効していた場合の共通処理：ログイン情報を消してログイン画面に戻す
+function handleAuthFailure(message) {
+  clearAuthToken();
+  sessionStorage.removeItem('studentName');
+  sessionStorage.removeItem('studentGrade');
+  sessionStorage.removeItem('studentClass');
+  clearHistory();
+  switchAuthTab('login');
+  document.getElementById('login-error').textContent = message || '再度ログインしてください';
+  document.getElementById('login-error').classList.add('visible');
+  showAuthModal();
+}
+
+document.getElementById('btn-logout').addEventListener('click', () => {
+  clearAuthToken();
+  sessionStorage.removeItem('studentName');
+  sessionStorage.removeItem('studentGrade');
+  sessionStorage.removeItem('studentClass');
+  clearHistory();
+  switchAuthTab('login');
+  showAuthModal();
+});
 
 // ── チャット表示 ──
 function addSystemMsg(text) {
@@ -655,9 +851,11 @@ async function sendFeedback(feedback, questionText, aiReply, containerEl) {
   try {
     await fetch('/api/feedback', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + getAuthToken()
+      },
       body: JSON.stringify({
-        studentName: getStudentName(),
         studentGrade: getStudentGrade(),
         studentClass: getStudentClass(),
         feedback,
@@ -811,7 +1009,10 @@ async function postChatWithRetry(payload) {
     try {
       const res = await fetchWithTimeout('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getAuthToken()
+        },
         body: JSON.stringify(payload)
       });
       if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === MAX_RETRIES) {
@@ -857,11 +1058,11 @@ async function sendMessage() {
   if (isSending) return;
   const text = msgInput.value.trim();
   if (!text && !pendingImageBase64) return;
-  const studentName  = getStudentName();
+  if (!getAuthToken()) { showAuthModal(); return; }
   const studentGrade = getStudentGrade();
   const studentClass = getStudentClass();
   const classOk = isHighSchool(studentGrade) || studentClass;
-  if (!studentName || !studentGrade || !classOk) { showNameModal(); return; }
+  if (!studentGrade || !classOk) { showGradeModal(); return; }
 
   isSending = true;
   document.getElementById('btn-send').disabled = true;
@@ -884,7 +1085,6 @@ async function sendMessage() {
   addLoadingBubble();
 
   const payload = {
-    studentName,
     studentGrade,
     studentClass,
     message: text,
@@ -912,7 +1112,9 @@ async function sendMessage() {
       await handleSuccess(res);
     } else {
       const errData = await res.json().catch(() => ({}));
-      if (res.status === 429 && errData.retryAfterSec) {
+      if (res.status === 401) {
+        handleAuthFailure(errData.error || 'ログインの有効期限が切れたみたい。もう一度ログインしてね。');
+      } else if (res.status === 429 && errData.retryAfterSec) {
         // 分あたり制限（混雑）：カウントダウン後に1回だけ自動再送。
         // その間は入力欄・ボタンをロックして、生徒が続けて送れないようにする
         setInputsDisabled(true);
@@ -993,27 +1195,10 @@ msgInput.addEventListener('keydown', (e) => {
 
 // ── 初期化 ──
 (function init() {
-  const name  = getStudentName();
-  const grade = getStudentGrade();
-  const className = getStudentClass();
-  const classOk = isHighSchool(grade) || className;
-  if (!name || !grade || !classOk) {
-    showNameModal();
+  if (!getAuthToken() || !getStudentName()) {
+    showAuthModal();
   } else {
-    setStudentInfo(name, grade, className);
-    history = loadHistory();
-    if (history.length > 0) {
-      let lastUserText = '';
-      history.forEach(h => {
-        if (h.role === 'user') { addUserBubble(h.text, null); lastUserText = h.text; }
-        else if (h.role === 'model') addAIBubble(h.text, lastUserText);
-        else if (h.role === 'divider') addDividerMsg(h.text);
-      });
-      addSystemMsg('おかえり、' + name + ' さん！ 続きから質問できるよ 😊');
-    } else {
-      addSystemMsg('おかえり、' + name + ' さん！ 質問を入力してね 😊');
-      addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
-    }
+    afterLogin();
   }
 })();
 </script>
