@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生徒アカウント管理 | 進学塾 湊</title>
+<style>
+  :root {
+    --color-primary:    #1B3A5B;
+    --color-accent:     #2E86C1;
+    --color-accent-soft:#EAF3FA;
+    --color-bg:         #F7FAFC;
+    --color-surface:    #FFFFFF;
+    --color-text:       #243441;
+    --color-muted:      #6B7B8A;
+    --color-warn:       #C0712B;
+    --color-danger:     #C0392B;
+    --color-ok:         #2E8B57;
+    --radius: 12px;
+    --font: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--color-bg);
+    color: var(--color-text);
+    min-height: 100vh;
+  }
+  header {
+    background: var(--color-primary);
+    color: #fff;
+    padding: 14px 20px;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+  /* ── ログイン画面 ── */
+  #login-view {
+    max-width: 360px;
+    margin: 60px auto;
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  #login-view h2 { font-size: 1rem; margin-bottom: 14px; }
+  #login-view input {
+    width: 100%; padding: 10px 12px; font-size: 0.95rem;
+    border: 1px solid #D6DEE5; border-radius: 8px; margin-bottom: 10px;
+  }
+  #login-view button, .btn {
+    background: var(--color-accent); color: #fff; border: none;
+    border-radius: 8px; padding: 9px 16px; font-size: 0.9rem;
+    cursor: pointer;
+  }
+  #login-view button:hover, .btn:hover { opacity: 0.9; }
+  #login-error { color: var(--color-danger); font-size: 0.82rem; min-height: 1.2em; margin-bottom: 6px; }
+
+  /* ── 一覧画面 ── */
+  #main-view { display: none; }
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin-bottom: 14px;
+  }
+  .btn.secondary { background: #fff; color: var(--color-text); border: 1px solid #D6DEE5; }
+  .btn.approve { background: var(--color-ok); }
+  .btn.reject  { background: var(--color-warn); }
+  .btn.delete  { background: var(--color-danger); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .spacer { flex: 1; }
+
+  table {
+    width: 100%; border-collapse: collapse; background: var(--color-surface);
+    border-radius: var(--radius); overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  }
+  th, td {
+    text-align: left; padding: 10px 12px; font-size: 0.88rem;
+    border-bottom: 1px solid #EEF2F5;
+  }
+  th { background: var(--color-accent-soft); color: var(--color-primary); font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 0.78rem; font-weight: 700;
+  }
+  .badge.pending  { background: #FFF2E0; color: var(--color-warn); }
+  .badge.approved { background: #E5F4EC; color: var(--color-ok); }
+  .badge.rejected { background: #FBEAE8; color: var(--color-danger); }
+
+  .row-actions { display: flex; gap: 6px; }
+  .row-actions button {
+    font-size: 0.78rem; padding: 4px 8px; border-radius: 6px; border: none; cursor: pointer; color: #fff;
+  }
+  .row-actions .approve { background: var(--color-ok); }
+  .row-actions .reject  { background: var(--color-warn); }
+  .row-actions .delete  { background: var(--color-danger); }
+
+  #status-msg { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 10px; min-height: 1.2em; }
+  #empty-msg { padding: 30px; text-align: center; color: var(--color-muted); }
+</style>
+</head>
+<body>
+
+<header>生徒アカウント管理</header>
+
+<main>
+  <div id="login-view">
+    <h2>管理者パスワードを入力してください</h2>
+    <div id="login-error"></div>
+    <input type="password" id="admin-password-input" placeholder="管理者パスワード" autocomplete="current-password">
+    <button id="btn-login">ログイン</button>
+  </div>
+
+  <div id="main-view">
+    <div id="status-msg"></div>
+    <div class="toolbar">
+      <button class="btn secondary" id="btn-select-all">全選択</button>
+      <button class="btn secondary" id="btn-select-none">全解除</button>
+      <div class="spacer"></div>
+      <button class="btn approve" id="btn-bulk-approve" disabled>選択を承認</button>
+      <button class="btn reject"  id="btn-bulk-reject"  disabled>選択を却下</button>
+      <button class="btn delete"  id="btn-bulk-delete"  disabled>選択を削除</button>
+      <button class="btn secondary" id="btn-refresh">再読み込み</button>
+    </div>
+    <div id="table-wrap"></div>
+  </div>
+</main>
+
+<script>
+let adminPassword = sessionStorage.getItem('ADMIN_PASSWORD') || '';
+let students = [];
+
+const loginView = document.getElementById('login-view');
+const mainView = document.getElementById('main-view');
+const loginError = document.getElementById('login-error');
+const statusMsg = document.getElementById('status-msg');
+const tableWrap = document.getElementById('table-wrap');
+
+function showMain() {
+  loginView.style.display = 'none';
+  mainView.style.display = 'block';
+}
+
+async function apiRequest(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Password': adminPassword,
+      ...(options.headers || {})
+    }
+  });
+  return res;
+}
+
+async function loadStudents() {
+  statusMsg.textContent = '読み込み中…';
+  const res = await apiRequest('/api/admin/students', { method: 'GET' });
+  if (res.status === 401) {
+    sessionStorage.removeItem('ADMIN_PASSWORD');
+    adminPassword = '';
+    loginView.style.display = 'block';
+    mainView.style.display = 'none';
+    loginError.textContent = '管理者パスワードが違うか、期限切れです。もう一度入力してください。';
+    return;
+  }
+  if (!res.ok) {
+    statusMsg.textContent = '読み込みに失敗しました。少し待ってから「再読み込み」を押してください。';
+    return;
+  }
+  const data = await res.json();
+  students = data.students || [];
+  statusMsg.textContent = `${students.length}件`;
+  renderTable();
+}
+
+function statusLabel(status) {
+  if (status === 'approved') return { text: '承認済み', cls: 'approved' };
+  if (status === 'rejected') return { text: '却下', cls: 'rejected' };
+  return { text: '承認待ち', cls: 'pending' };
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+}
+
+function renderTable() {
+  if (students.length === 0) {
+    tableWrap.innerHTML = '<div id="empty-msg">登録されている生徒はいません</div>';
+    updateBulkButtons();
+    return;
+  }
+  const rows = students.map(s => {
+    const st = statusLabel(s.status);
+    return `
+      <tr data-id="${s.id}">
+        <td><input type="checkbox" class="row-check" value="${s.id}"></td>
+        <td>${escapeHtml(s.name)}</td>
+        <td><span class="badge ${st.cls}">${st.text}</span></td>
+        <td>${formatDate(s.created_at)}</td>
+        <td class="row-actions">
+          <button class="approve" data-action="approve" data-id="${s.id}">承認</button>
+          <button class="reject"  data-action="reject"  data-id="${s.id}">却下</button>
+          <button class="delete"  data-action="delete"  data-id="${s.id}">削除</button>
+        </td>
+      </tr>`;
+  }).join('');
+  tableWrap.innerHTML = `
+    <table>
+      <thead>
+        <tr><th></th><th>名前</th><th>状態</th><th>登録日時</th><th>操作</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  tableWrap.querySelectorAll('.row-check').forEach(cb => {
+    cb.addEventListener('change', updateBulkButtons);
+  });
+  tableWrap.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-action');
+      const id = btn.getAttribute('data-id');
+      runAction(action, [id]);
+    });
+  });
+  updateBulkButtons();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+function getCheckedIds() {
+  return [...tableWrap.querySelectorAll('.row-check:checked')].map(cb => cb.value);
+}
+
+function updateBulkButtons() {
+  const count = getCheckedIds().length;
+  document.getElementById('btn-bulk-approve').disabled = count === 0;
+  document.getElementById('btn-bulk-reject').disabled = count === 0;
+  document.getElementById('btn-bulk-delete').disabled = count === 0;
+}
+
+async function runAction(action, ids) {
+  if (action === 'delete') {
+    const ok = confirm(`${ids.length}件を削除します。元に戻せません。よろしいですか？`);
+    if (!ok) return;
+  }
+  statusMsg.textContent = '処理中…';
+  const res = await apiRequest('/api/admin/students', {
+    method: 'POST',
+    body: JSON.stringify({ action, ids })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    statusMsg.textContent = data.error || '操作に失敗しました';
+    return;
+  }
+  await loadStudents();
+}
+
+document.getElementById('btn-login').addEventListener('click', async () => {
+  const value = document.getElementById('admin-password-input').value;
+  if (!value) return;
+  adminPassword = value;
+  loginError.textContent = '';
+  const res = await apiRequest('/api/admin/students', { method: 'GET' });
+  if (res.status === 401) {
+    adminPassword = '';
+    loginError.textContent = '管理者パスワードが違います';
+    return;
+  }
+  if (!res.ok) {
+    loginError.textContent = 'サーバーエラーが起きました。しばらくしてからもう一度試してください。';
+    return;
+  }
+  sessionStorage.setItem('ADMIN_PASSWORD', value);
+  const data = await res.json();
+  students = data.students || [];
+  showMain();
+  statusMsg.textContent = `${students.length}件`;
+  renderTable();
+});
+
+document.getElementById('admin-password-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-login').click();
+});
+
+document.getElementById('btn-select-all').addEventListener('click', () => {
+  tableWrap.querySelectorAll('.row-check').forEach(cb => { cb.checked = true; });
+  updateBulkButtons();
+});
+document.getElementById('btn-select-none').addEventListener('click', () => {
+  tableWrap.querySelectorAll('.row-check').forEach(cb => { cb.checked = false; });
+  updateBulkButtons();
+});
+document.getElementById('btn-bulk-approve').addEventListener('click', () => runAction('approve', getCheckedIds()));
+document.getElementById('btn-bulk-reject').addEventListener('click',  () => runAction('reject',  getCheckedIds()));
+document.getElementById('btn-bulk-delete').addEventListener('click',  () => runAction('delete',  getCheckedIds()));
+document.getElementById('btn-refresh').addEventListener('click', loadStudents);
+
+// 前回ログイン済み（sessionStorageにパスワードが残っている）ならそのまま一覧表示
+if (adminPassword) {
+  showMain();
+  loadStudents();
+}
+</script>
+</body>
+</html>

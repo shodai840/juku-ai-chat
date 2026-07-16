@@ -2,6 +2,7 @@
 // api/feedback.js  — Vercel Serverless Function
 // AIの回答への👍👎フィードバックを受け取り、Geminiで科目を判定してからApps Scriptへ送信
 import { waitUntil } from '@vercel/functions';
+import { verifyAuth } from '../lib/auth/verifyAuth.js';
 
 function jstTimestamp() {
   const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
@@ -65,7 +66,8 @@ async function sendFeedbackLog(payload) {
     const logRes = await fetch(LOG_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      // log.gs側でLOG_SHARED_SECRETが設定されるまでは無視される（後方互換）
+      body: JSON.stringify({ ...payload, secret: process.env.LOG_SHARED_SECRET || '' }),
       redirect: 'follow'
     });
     console.log('フィードバックログ送信ステータス:', logRes.status);
@@ -86,11 +88,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { studentName, studentGrade, studentClass, feedback, questionText, aiReply } = req.body || {};
-
-  if (!studentName || typeof studentName !== 'string') {
-    return res.status(400).json({ error: '生徒名が必要です' });
+  const student = await verifyAuth(req);
+  if (!student) {
+    return res.status(401).json({ error: 'ログインが必要です。もう一度ログインしてね。' });
   }
+  const studentName = student.name;
+  const { studentGrade, studentClass, feedback, questionText, aiReply } = req.body || {};
+
   if (feedback !== 'good' && feedback !== 'bad') {
     return res.status(400).json({ error: '評価の値が不正です' });
   }
