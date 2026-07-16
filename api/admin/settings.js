@@ -1,7 +1,7 @@
 
-// api/admin/students.js — Vercel Serverless Function
-// 管理者用：生徒の一覧取得・承認・却下・削除（ADMIN_PASSWORDで保護、管理者は一人の想定）
-import { listStudents, updateStudentsStatus, deleteStudents } from '../../lib/supabase.js';
+// api/admin/settings.js — Vercel Serverless Function
+// 管理者用：アプリ設定の取得・更新（現状はLINE通知のオン/オフのみ。ADMIN_PASSWORDで保護）
+import { getSettings, updateSettings } from '../../lib/supabase.js';
 import { isAdminAuthorized } from '../../lib/auth/adminAuth.js';
 
 // ── 管理者パスワードの連続試行制限（総当たり対策：5分あたり10回まで）──
@@ -35,32 +35,24 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const students = await listStudents();
-      return res.status(200).json({ students });
+      const settings = await getSettings();
+      return res.status(200).json({ settings });
     } catch (err) {
-      console.error('生徒一覧取得エラー:', err);
+      console.error('設定取得エラー:', err);
       return res.status(500).json({ error: 'サーバーエラーが起きました' });
     }
   }
 
   if (req.method === 'POST') {
-    const { action, ids } = req.body || {};
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: 'idsが必要です' });
+    const { lineNotifyEnabled } = req.body || {};
+    if (typeof lineNotifyEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'lineNotifyEnabledが必要です' });
     }
     try {
-      if (action === 'approve') {
-        await updateStudentsStatus(ids, 'approved');
-      } else if (action === 'reject') {
-        await updateStudentsStatus(ids, 'rejected');
-      } else if (action === 'delete') {
-        await deleteStudents(ids);
-      } else {
-        return res.status(400).json({ error: 'actionが不正です' });
-      }
+      await updateSettings({ line_notify_enabled: lineNotifyEnabled });
       return res.status(200).json({ status: 'ok' });
     } catch (err) {
-      console.error('管理者操作エラー:', err);
+      console.error('設定更新エラー:', err);
       return res.status(500).json({ error: 'サーバーエラーが起きました' });
     }
   }
