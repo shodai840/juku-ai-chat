@@ -121,6 +121,7 @@
     <div id="status-msg"></div>
     <div class="toolbar">
       <button class="btn secondary" id="btn-select-all">全選択</button>
+      <button class="btn secondary" id="btn-select-pending">承認待ちのみ選択</button>
       <button class="btn secondary" id="btn-select-none">全解除</button>
       <div class="spacer"></div>
       <button class="btn approve" id="btn-bulk-approve" disabled>選択を承認</button>
@@ -303,6 +304,13 @@ document.getElementById('btn-select-all').addEventListener('click', () => {
 });
 document.getElementById('btn-select-none').addEventListener('click', () => {
   tableWrap.querySelectorAll('.row-check').forEach(cb => { cb.checked = false; });
+  updateBulkButtons();
+});
+document.getElementById('btn-select-pending').addEventListener('click', () => {
+  tableWrap.querySelectorAll('.row-check').forEach(cb => {
+    const student = students.find(s => String(s.id) === cb.value);
+    cb.checked = !!(student && student.status === 'pending');
+  });
   updateBulkButtons();
 });
 document.getElementById('btn-bulk-approve').addEventListener('click', () => runAction('approve', getCheckedIds()));
