@@ -102,6 +102,12 @@
   .row-actions .delete  { background: var(--color-danger); }
 
   #status-msg { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 10px; min-height: 1.2em; }
+  #settings-row {
+    background: var(--color-surface); border-radius: var(--radius);
+    padding: 10px 14px; margin-bottom: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  }
+  #line-notify-label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
   #empty-msg { padding: 30px; text-align: center; color: var(--color-muted); }
 </style>
 </head>
@@ -119,8 +125,15 @@
 
   <div id="main-view">
     <div id="status-msg"></div>
+    <div id="settings-row">
+      <label id="line-notify-label">
+        <input type="checkbox" id="toggle-line-notify">
+        新規登録時にLINE通知を送る
+      </label>
+    </div>
     <div class="toolbar">
       <button class="btn secondary" id="btn-select-all">全選択</button>
+      <button class="btn secondary" id="btn-select-pending">承認待ちのみ選択</button>
       <button class="btn secondary" id="btn-select-none">全解除</button>
       <div class="spacer"></div>
       <button class="btn approve" id="btn-bulk-approve" disabled>選択を承認</button>
@@ -241,6 +254,13 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+async function loadSettings() {
+  const res = await apiRequest('/api/admin/settings', { method: 'GET' });
+  if (!res.ok) return;
+  const data = await res.json();
+  document.getElementById('toggle-line-notify').checked = data.settings.line_notify_enabled !== false;
+}
+
 function getCheckedIds() {
   return [...tableWrap.querySelectorAll('.row-check:checked')].map(cb => cb.value);
 }
@@ -291,6 +311,19 @@ document.getElementById('btn-login').addEventListener('click', async () => {
   showMain();
   statusMsg.textContent = `${students.length}件`;
   renderTable();
+  loadSettings();
+});
+
+document.getElementById('toggle-line-notify').addEventListener('change', async (e) => {
+  const enabled = e.target.checked;
+  const res = await apiRequest('/api/admin/settings', {
+    method: 'POST',
+    body: JSON.stringify({ lineNotifyEnabled: enabled })
+  });
+  if (!res.ok) {
+    e.target.checked = !enabled;
+    statusMsg.textContent = '設定の更新に失敗しました';
+  }
 });
 
 document.getElementById('admin-password-input').addEventListener('keydown', (e) => {
@@ -305,6 +338,13 @@ document.getElementById('btn-select-none').addEventListener('click', () => {
   tableWrap.querySelectorAll('.row-check').forEach(cb => { cb.checked = false; });
   updateBulkButtons();
 });
+document.getElementById('btn-select-pending').addEventListener('click', () => {
+  tableWrap.querySelectorAll('.row-check').forEach(cb => {
+    const student = students.find(s => String(s.id) === cb.value);
+    cb.checked = !!(student && student.status === 'pending');
+  });
+  updateBulkButtons();
+});
 document.getElementById('btn-bulk-approve').addEventListener('click', () => runAction('approve', getCheckedIds()));
 document.getElementById('btn-bulk-reject').addEventListener('click',  () => runAction('reject',  getCheckedIds()));
 document.getElementById('btn-bulk-delete').addEventListener('click',  () => runAction('delete',  getCheckedIds()));
@@ -314,6 +354,7 @@ document.getElementById('btn-refresh').addEventListener('click', loadStudents);
 if (adminPassword) {
   showMain();
   loadStudents();
+  loadSettings();
 }
 </script>
 </body>

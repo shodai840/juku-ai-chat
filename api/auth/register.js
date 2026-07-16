@@ -4,7 +4,7 @@
 import { waitUntil } from '@vercel/functions';
 import { normalizeName } from '../../lib/auth/normalizeName.js';
 import { hashPassword } from '../../lib/auth/crypto.js';
-import { findStudentByNormalizedName, insertStudent } from '../../lib/supabase.js';
+import { findStudentByNormalizedName, insertStudent, getSettings } from '../../lib/supabase.js';
 import { sendLineNotification } from '../../lib/line.js';
 
 // ── 同一IPからの連続登録試行の制限（乱用防止：1分あたり5回まで）──
@@ -74,9 +74,20 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'サーバーエラーが起きました。しばらくしてからもう一度試してね。' });
   }
 
-  waitUntil(sendLineNotification(
-    `【生徒登録申請】\n名前：${student.name}\n管理画面から承認してください。`
-  ));
+  waitUntil((async () => {
+    let notifyEnabled = true;
+    try {
+      const settings = await getSettings();
+      notifyEnabled = settings.line_notify_enabled !== false;
+    } catch (err) {
+      console.error('LINE通知可否設定の取得エラー（通知は送る）:', err);
+    }
+    if (notifyEnabled) {
+      await sendLineNotification(
+        `【生徒登録申請】\n名前：${student.name}\n管理画面から承認してください。`
+      );
+    }
+  })());
 
   return res.status(200).json({
     status: 'pending',
