@@ -201,6 +201,10 @@ async function loadStudents() {
     loginError.textContent = '管理者パスワードが違うか、期限切れです。もう一度入力してください。';
     return;
   }
+  if (res.status === 429) {
+    statusMsg.textContent = '⏳ アクセスが集中しています。5分ほど待ってからもう一度試してください。';
+    return;
+  }
   if (!res.ok) {
     statusMsg.textContent = '読み込みに失敗しました。少し待ってから「再読み込み」を押してください。';
     return;
@@ -324,6 +328,11 @@ document.getElementById('btn-login').addEventListener('click', async () => {
   if (res.status === 401) {
     adminPassword = '';
     loginError.textContent = '管理者パスワードが違います';
+    return;
+  }
+  if (res.status === 429) {
+    adminPassword = '';
+    loginError.textContent = '⏳ アクセスが集中しています。5分ほど待ってからもう一度試してください。';
     return;
   }
   if (!res.ok) {
