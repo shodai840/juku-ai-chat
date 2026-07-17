@@ -17,7 +17,7 @@ function isRateLimited(key) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', 'https://juku-ai-chat.vercel.app');
+  res.setHeader('Access-Control-Allow-Origin', 'https://minato-ai-chat.vercel.app');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Password');
   if (req.method === 'OPTIONS') {
