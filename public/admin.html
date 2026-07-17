@@ -101,7 +101,8 @@
   .row-actions .reject  { background: var(--color-warn); }
   .row-actions .delete  { background: var(--color-danger); }
 
-  #status-msg { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 10px; min-height: 1.2em; }
+  #status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #status-msg { font-size: 0.85rem; color: var(--color-muted); min-height: 1.2em; flex: 1; }
   #settings-row {
     background: var(--color-surface); border-radius: var(--radius);
     padding: 10px 14px; margin-bottom: 14px;
@@ -109,12 +110,13 @@
   }
   #line-notify-label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
   #master-settings-row {
-    background: var(--color-surface); border-radius: var(--radius);
+    background: #FBEAE8; border-radius: var(--radius);
     border-left: 4px solid var(--color-danger);
     padding: 10px 14px; margin-bottom: 14px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
   }
-  #auto-approve-label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
+  #auto-approve-label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: var(--color-danger); font-weight: 700; }
+  #btn-logout { flex-shrink: 0; }
   #empty-msg { padding: 30px; text-align: center; color: var(--color-muted); }
 </style>
 </head>
@@ -131,7 +133,10 @@
   </div>
 
   <div id="main-view">
-    <div id="status-msg"></div>
+    <div id="status-row">
+      <div id="status-msg"></div>
+      <button class="btn secondary" id="btn-logout">ログアウト</button>
+    </div>
     <div id="settings-row">
       <label id="line-notify-label">
         <input type="checkbox" id="toggle-line-notify">
@@ -141,7 +146,7 @@
     <div id="master-settings-row" style="display:none">
       <label id="auto-approve-label">
         <input type="checkbox" id="toggle-auto-approve">
-        自動承認モード（新規登録を即座に承認する）
+        🔒 マスター限定：自動承認モード（新規登録を即座に承認する）
       </label>
     </div>
     <div class="toolbar">
@@ -381,6 +386,14 @@ document.getElementById('btn-bulk-approve').addEventListener('click', () => runA
 document.getElementById('btn-bulk-reject').addEventListener('click',  () => runAction('reject',  getCheckedIds()));
 document.getElementById('btn-bulk-delete').addEventListener('click',  () => runAction('delete',  getCheckedIds()));
 document.getElementById('btn-refresh').addEventListener('click', loadStudents);
+document.getElementById('btn-logout').addEventListener('click', () => {
+  sessionStorage.removeItem('ADMIN_PASSWORD');
+  adminPassword = '';
+  document.getElementById('admin-password-input').value = '';
+  document.getElementById('login-error').textContent = '';
+  mainView.style.display = 'none';
+  loginView.style.display = 'block';
+});
 
 // 前回ログイン済み（sessionStorageにパスワードが残っている）ならそのまま一覧表示
 if (adminPassword) {
