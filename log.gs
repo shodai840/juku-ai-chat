@@ -159,21 +159,24 @@ function parseLogDate(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-// 直前の月曜0:00〜今週月曜0:00の直前（＝先週1週間分）の生徒ごとの質問回数・合計Tokenを集計し、
-// 「週次利用状況」シートの先頭（ヘッダーの直後）に追記する。誰がよく使っているかを把握する目的。
-// 毎週月曜の朝に自動実行される想定（createWeeklyTrigger()で最初に1回だけ手動セットアップが必要）
-function recordWeeklyUsage() {
+// 今日を含む週の月曜0:00を求める
+function getThisMonday(now) {
+  const dayOfWeek = now.getDay(); // 0=日, 1=月, ...6=土
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+}
+
+// [weekStart, weekStart+7日) の範囲で生徒ごとの質問回数・合計Tokenを集計し、
+// 「週次利用状況」シートの先頭（ヘッダーの直後）に追記する（無ければ結果を返すだけで何も書かない）。
+// 戻り値は書き込んだ行数（0なら対象期間の利用者なし）。
+function aggregateUsageForWeek(weekStart) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                 || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return; // ログがまだない
+  if (lastRow < 2) return 0; // ログがまだない
 
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=日, 1=月, ...6=土
-  const daysSinceMonday = (dayOfWeek + 6) % 7;
-  const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
-  const lastMonday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7);
-  const weekStartStr = Utilities.formatDate(lastMonday, 'Asia/Tokyo', 'yyyy-MM-dd');
+  const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7);
+  const weekStartStr = Utilities.formatDate(weekStart, 'Asia/Tokyo', 'yyyy-MM-dd');
 
   // A列(日時)〜J列(合計Token)を読む
   const data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
@@ -181,7 +184,7 @@ function recordWeeklyUsage() {
 
   data.forEach(row => {
     const rowDate = parseLogDate(row[0]);
-    if (!rowDate || rowDate < lastMonday || rowDate >= thisMonday) return;
+    if (!rowDate || rowDate < weekStart || rowDate >= weekEnd) return;
     const studentName = String(row[3] || '不明');
     const tokens = Number(row[9]) || 0;
     if (!usageByStudent[studentName]) usageByStudent[studentName] = { count: 0, tokens: 0 };
@@ -193,7 +196,7 @@ function recordWeeklyUsage() {
     .map(name => [weekStartStr, name, usageByStudent[name].count, usageByStudent[name].tokens])
     .sort((a, b) => b[2] - a[2]); // 質問回数の多い順
 
-  if (rows.length === 0) return; // その週の利用者がいなければ何も書かない
+  if (rows.length === 0) return 0; // その週の利用者がいなければ何も書かない
 
   const weeklySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(WEEKLY_SHEET_NAME)
                        || SpreadsheetApp.getActiveSpreadsheet().insertSheet(WEEKLY_SHEET_NAME);
@@ -203,6 +206,26 @@ function recordWeeklyUsage() {
   // 新しい週を一番上（ヘッダーの直後）に挿入し、古い週は下に押し出す
   weeklySheet.insertRowsAfter(1, rows.length);
   weeklySheet.getRange(2, 1, rows.length, 4).setValues(rows);
+  return rows.length;
+}
+
+// 直前の月曜0:00〜今週月曜0:00の直前（＝先週1週間分、すでに終わった週）を集計する。
+// 誰がよく使っているかを把握する目的。毎週月曜の朝に自動実行される想定
+// （createWeeklyTrigger()で最初に1回だけ手動セットアップが必要）。
+function recordWeeklyUsage() {
+  const thisMonday = getThisMonday(new Date());
+  const lastMonday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7);
+  aggregateUsageForWeek(lastMonday);
+}
+
+// 【手動実行用】今週分（月曜〜今日、まだ終わっていない進行中の週）を今すぐ集計したいときに使う。
+// 通常は自動実行される recordWeeklyUsage()（先週の完了分）だけで十分だが、
+// 導入直後などまだ「先週分」のデータが無く週次シートに何も出ないときの動作確認用。
+// 週の途中で使うと「今週分」が確定前の状態で記録され、翌週以降さらに追記されるため重複行になる点に注意。
+function previewCurrentWeekUsage() {
+  const thisMonday = getThisMonday(new Date());
+  const count = aggregateUsageForWeek(thisMonday);
+  Logger.log(count > 0 ? `今週分を${count}件記録しました` : '今週分のログがまだありません');
 }
 
 // 【初回のみ手動実行】毎週月曜の朝に recordWeeklyUsage() を自動実行するトリガーを設定する。
