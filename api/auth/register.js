@@ -6,6 +6,7 @@ import { normalizeName } from '../../lib/auth/normalizeName.js';
 import { hashPassword } from '../../lib/auth/crypto.js';
 import { findStudentByNormalizedName, insertStudent, getSettings } from '../../lib/supabase.js';
 import { sendLineNotification } from '../../lib/line.js';
+import { signToken } from '../../lib/auth/jwt.js';
 
 // ── 同一IPからの連続登録試行の制限（乱用防止：1分あたり5回まで）──
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -92,10 +93,23 @@ export default async function handler(req, res) {
     ));
   }
 
+  if (autoApprove) {
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      console.error('JWT_SECRET が設定されていません');
+      return res.status(500).json({ error: 'サーバー設定エラーです。管理者に連絡してください。' });
+    }
+    const token = signToken({ sub: student.id, name: student.name }, JWT_SECRET);
+    return res.status(200).json({
+      status: 'approved',
+      token,
+      name: student.name,
+      message: '登録が完了しました。すぐに始められるよ！'
+    });
+  }
+
   return res.status(200).json({
-    status: initialStatus,
-    message: autoApprove
-      ? '登録が完了しました。すぐに使えます。'
-      : '登録を受け付けました。先生の承認をお待ちください。'
+    status: 'pending',
+    message: '登録を受け付けました。先生が承認するまで少し待ってから、ログインしてね。'
   });
 }
