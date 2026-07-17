@@ -250,11 +250,21 @@ async function handleRegister() {
       showAuthError('register-error', data.error || '登録に失敗しました');
       return;
     }
-    const successEl = document.getElementById('register-success');
-    successEl.textContent = data.message || '登録を受け付けました。先生の承認をお待ちください。';
-    successEl.classList.add('visible');
     document.getElementById('register-name-input').value = '';
     document.getElementById('register-password-input').value = '';
+
+    // 自動承認モードでトークンが発行された場合は、そのままログイン状態にして始める
+    if (data.token) {
+      setAuthToken(data.token);
+      sessionStorage.setItem('studentName', data.name);
+      hideAuthModal();
+      afterLogin();
+      return;
+    }
+
+    const successEl = document.getElementById('register-success');
+    successEl.textContent = data.message || '登録を受け付けました。先生が承認するまで少し待ってから、ログインしてね。';
+    successEl.classList.add('visible');
   } catch (err) {
     showAuthError('register-error', '通信エラーが起きました。もう一度試してね。');
   } finally {

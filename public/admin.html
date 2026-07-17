@@ -108,6 +108,13 @@
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
   }
   #line-notify-label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
+  #master-settings-row {
+    background: var(--color-surface); border-radius: var(--radius);
+    border-left: 4px solid var(--color-danger);
+    padding: 10px 14px; margin-bottom: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  }
+  #auto-approve-label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
   #empty-msg { padding: 30px; text-align: center; color: var(--color-muted); }
 </style>
 </head>
@@ -129,6 +136,12 @@
       <label id="line-notify-label">
         <input type="checkbox" id="toggle-line-notify">
         新規登録時にLINE通知を送る
+      </label>
+    </div>
+    <div id="master-settings-row" style="display:none">
+      <label id="auto-approve-label">
+        <input type="checkbox" id="toggle-auto-approve">
+        自動承認モード（新規登録を即座に承認する）
       </label>
     </div>
     <div class="toolbar">
@@ -259,6 +272,13 @@ async function loadSettings() {
   if (!res.ok) return;
   const data = await res.json();
   document.getElementById('toggle-line-notify').checked = data.settings.line_notify_enabled !== false;
+
+  const isMaster = data.adminLevel === 'master';
+  const masterRow = document.getElementById('master-settings-row');
+  masterRow.style.display = isMaster ? 'block' : 'none';
+  if (isMaster) {
+    document.getElementById('toggle-auto-approve').checked = data.settings.auto_approve_enabled === true;
+  }
 }
 
 function getCheckedIds() {
@@ -319,6 +339,18 @@ document.getElementById('toggle-line-notify').addEventListener('change', async (
   const res = await apiRequest('/api/admin/settings', {
     method: 'POST',
     body: JSON.stringify({ lineNotifyEnabled: enabled })
+  });
+  if (!res.ok) {
+    e.target.checked = !enabled;
+    statusMsg.textContent = '設定の更新に失敗しました';
+  }
+});
+
+document.getElementById('toggle-auto-approve').addEventListener('change', async (e) => {
+  const enabled = e.target.checked;
+  const res = await apiRequest('/api/admin/settings', {
+    method: 'POST',
+    body: JSON.stringify({ autoApproveEnabled: enabled })
   });
   if (!res.ok) {
     e.target.checked = !enabled;
