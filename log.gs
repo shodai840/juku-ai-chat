@@ -21,6 +21,7 @@
 
 const SHEET_NAME = 'Sheet1'; // シート名（変更した場合は合わせる）
 const FEEDBACK_SHEET_NAME = 'フィードバック'; // 生徒の👍👎を記録する専用シート（無ければ自動作成）
+const WEEKLY_SHEET_NAME = '週次利用状況'; // 生徒ごとの週次利用状況を自動記録するシート（無ければ自動作成）
 
 // ── 共有シークレット（任意）──
 // このWebアプリのURLを知っていれば誰でもPOSTできてしまう問題への対処。
@@ -148,6 +149,75 @@ function updateDailyCumulative() {
   }
 
   sheet.getRange(lastRow, 11).setValue(prevCumulative + thisRowTokens); // K列（11列目）
+}
+
+// タイムスタンプ文字列（'yyyy-MM-dd HH:mm:ss'）の先頭から日付部分だけを取り出してDateにする。パースできなければnull
+function parseLogDate(str) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(str || ''));
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// 直前の月曜0:00〜今週月曜0:00の直前（＝先週1週間分）の生徒ごとの質問回数・合計Tokenを集計し、
+// 「週次利用状況」シートの先頭（ヘッダーの直後）に追記する。誰がよく使っているかを把握する目的。
+// 毎週月曜の朝に自動実行される想定（createWeeklyTrigger()で最初に1回だけ手動セットアップが必要）
+function recordWeeklyUsage() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
+                || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return; // ログがまだない
+
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=日, 1=月, ...6=土
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+  const lastMonday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7);
+  const weekStartStr = Utilities.formatDate(lastMonday, 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  // A列(日時)〜J列(合計Token)を読む
+  const data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  const usageByStudent = {}; // 生徒名 -> { count, tokens }
+
+  data.forEach(row => {
+    const rowDate = parseLogDate(row[0]);
+    if (!rowDate || rowDate < lastMonday || rowDate >= thisMonday) return;
+    const studentName = String(row[3] || '不明');
+    const tokens = Number(row[9]) || 0;
+    if (!usageByStudent[studentName]) usageByStudent[studentName] = { count: 0, tokens: 0 };
+    usageByStudent[studentName].count += 1;
+    usageByStudent[studentName].tokens += tokens;
+  });
+
+  const rows = Object.keys(usageByStudent)
+    .map(name => [weekStartStr, name, usageByStudent[name].count, usageByStudent[name].tokens])
+    .sort((a, b) => b[2] - a[2]); // 質問回数の多い順
+
+  if (rows.length === 0) return; // その週の利用者がいなければ何も書かない
+
+  const weeklySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(WEEKLY_SHEET_NAME)
+                       || SpreadsheetApp.getActiveSpreadsheet().insertSheet(WEEKLY_SHEET_NAME);
+  if (weeklySheet.getLastRow() === 0) {
+    weeklySheet.appendRow(['週開始日（月）', '生徒名', '質問回数', '合計Token']);
+  }
+  // 新しい週を一番上（ヘッダーの直後）に挿入し、古い週は下に押し出す
+  weeklySheet.insertRowsAfter(1, rows.length);
+  weeklySheet.getRange(2, 1, rows.length, 4).setValues(rows);
+}
+
+// 【初回のみ手動実行】毎週月曜の朝に recordWeeklyUsage() を自動実行するトリガーを設定する。
+// Apps Scriptエディタで上部の対象関数を「createWeeklyTrigger」に選んでから「実行」ボタンを押してください
+// （初回は権限の承認が求められます）。すでに同名のトリガーがあれば一度削除してから作り直すので、
+// 設定をやり直したいときも同じ関数を実行するだけでOK。
+function createWeeklyTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'recordWeeklyUsage') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('recordWeeklyUsage')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(6)
+    .create();
 }
 
 // テスト用（Apps Scriptエディタから手動実行できる）
