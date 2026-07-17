@@ -220,6 +220,29 @@ function createWeeklyTrigger() {
     .create();
 }
 
+// 【初回のみ手動実行】質問ログ・フィードバックの「新しい順」ビュー用シートを作成する。
+// 元データ（Sheet1・フィードバック）の並び順や書き込み方法は一切変更しない。
+// SORT関数で参照するだけの別シートなので、質問のたびに走る書き込み処理の速度には影響しない。
+// 既に同名シートがあれば作り直すだけなので、再実行しても安全。
+function createLogViews() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const logSheet = ss.getSheetByName(SHEET_NAME) || ss.getActiveSheet();
+  const logSheetName = logSheet.getName();
+  const logView = ss.getSheetByName('質問ログ') || ss.insertSheet('質問ログ');
+  logView.getRange('A1').setFormula(
+    `={'${logSheetName}'!A1:K1;SORT('${logSheetName}'!A2:K,1,FALSE)}`
+  );
+
+  const feedbackSheet = ss.getSheetByName(FEEDBACK_SHEET_NAME);
+  if (feedbackSheet) {
+    const feedbackView = ss.getSheetByName('フィードバックログ') || ss.insertSheet('フィードバックログ');
+    feedbackView.getRange('A1').setFormula(
+      `={'${FEEDBACK_SHEET_NAME}'!A1:J1;SORT('${FEEDBACK_SHEET_NAME}'!A2:J,1,FALSE)}`
+    );
+  }
+}
+
 // テスト用（Apps Scriptエディタから手動実行できる）
 function testLog() {
   const testData = {
