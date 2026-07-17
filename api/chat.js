@@ -80,7 +80,7 @@ function buildLevelInstruction(grade, className) {
 // 難問ほど正確さを優先し、そうでない場合は速度・コストを優先する。
 function resolveThinkingLevel(grade, className) {
   const g = grade || '';
-  if (g === '高3過去問') return 'HIGH';
+  if (g === '大学入試過去問') return 'HIGH';
   if (g.startsWith('高')) return 'MEDIUM';
   const c = className || '';
   if (c.startsWith('S')) return 'MEDIUM'; // 中3Sクラス（難関高校志望）
