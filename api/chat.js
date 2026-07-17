@@ -76,6 +76,16 @@ function buildLevelInstruction(grade, className) {
   }
   return `【この生徒について】\n- 学年：${g}\n- ${level}\n- 学年の範囲を超えた難しすぎる解法は避け、${g}が習う範囲のことばと方法で説明してください。`;
 }
+// 学年・クラスに応じてGeminiのthinkingレベル（内部思考の深さ）を決める。
+// 難問ほど正確さを優先し、そうでない場合は速度・コストを優先する。
+function resolveThinkingLevel(grade, className) {
+  const g = grade || '';
+  if (g === '高3大学入試') return 'HIGH';
+  if (g.startsWith('高')) return 'MEDIUM';
+  const c = className || '';
+  if (c.startsWith('S')) return 'MEDIUM'; // 中3Sクラス（難関高校志望）
+  return 'LOW'; // 中学生のA・B・個別クラス
+}
 // ── 同一生徒の連続リクエスト制限（乱用防止：1分あたり8回まで）──
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 8;
@@ -194,7 +204,8 @@ export default async function handler(req, res) {
     contents,
     generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 1024
+      maxOutputTokens: 1024,
+      thinkingConfig: { thinkingLevel: resolveThinkingLevel(studentGrade, studentClass) }
     }
   };
   let reply = '';

@@ -37,7 +37,7 @@ async function classifySubject(questionText, GEMINI_API_KEY) {
             parts: [{ text: '次の生徒の質問がどの教科か判定してください。「数学」「英語」「国語」「理科」「社会」「その他」のうち、あてはまる1語だけを出力してください。それ以外は何も書かないでください。' }]
           },
           contents: [{ role: 'user', parts: [{ text: questionText }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 10 }
+          generationConfig: { temperature: 0, maxOutputTokens: 10, thinkingConfig: { thinkingLevel: 'MINIMAL' } }
         })
       }
     );
