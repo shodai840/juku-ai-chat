@@ -40,7 +40,7 @@ function setAuthToken(t)  { sessionStorage.setItem('authToken', t); }
 function clearAuthToken() { sessionStorage.removeItem('authToken'); }
 
 // 高校生かどうか（高校生はクラスなし）
-function isHighSchool(grade) { return (grade || '').startsWith('高'); }
+function isHighSchool(grade) { return (grade || '').startsWith('高') || grade === '大学入試過去問'; }
 
 // ── 会話履歴の保存・復元（タブを閉じるまでは残る。閉じると次回は消える）──
 function saveHistory() {
