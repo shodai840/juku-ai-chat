@@ -476,10 +476,66 @@ function scrollBottom() {
 }
 
 // ── 画像処理 ──
+// JPEGのEXIF Orientationタグ(1〜8)を読み取る。EXIFが無い/JPEGでない/壊れている場合は
+// 1(補正不要)を返す。LINEアプリ内蔵ブラウザや一部Android機種では、canvas描画時に
+// ブラウザがEXIFの向きを自動補正してくれないことがあり、それが「縦向きで撮った写真しか
+// 正しく認識されない」不具合の原因になるため、明示的に読み取って自前で補正する。
+function getExifOrientation(arrayBuffer) {
+  try {
+    const view = new DataView(arrayBuffer);
+    if (view.getUint16(0, false) !== 0xFFD8) return 1; // JPEGではない
+    const length = view.byteLength;
+    let offset = 2;
+    while (offset < length - 1) {
+      const marker = view.getUint16(offset, false);
+      offset += 2;
+      if (marker === 0xFFE1) { // APP1 (EXIF)
+        if (view.getUint32(offset + 2, false) !== 0x45786966) return 1; // "Exif"ではない
+        const tiffOffset = offset + 8;
+        const little = view.getUint16(tiffOffset, false) === 0x4949;
+        const firstIFDOffset = view.getUint32(tiffOffset + 4, little);
+        const dirOffset = tiffOffset + firstIFDOffset;
+        const tagCount = view.getUint16(dirOffset, little);
+        for (let i = 0; i < tagCount; i++) {
+          const entryOffset = dirOffset + 2 + i * 12;
+          if (view.getUint16(entryOffset, little) === 0x0112) { // Orientationタグ
+            return view.getUint16(entryOffset + 8, little);
+          }
+        }
+        return 1;
+      } else if ((marker & 0xFF00) !== 0xFF00) {
+        break; // JPEGマーカーではない＝EXIF無し
+      } else {
+        offset += view.getUint16(offset, false);
+      }
+    }
+  } catch (err) {
+    // 壊れたEXIF等は無視して補正なしにフォールバック
+  }
+  return 1;
+}
+
+// EXIF Orientationに応じてcanvasコンテキストに回転・反転を適用する。
+// w, hは回転前（＝画像本来の向き）の描画サイズ。
+function applyExifTransform(ctx, orientation, w, h) {
+  switch (orientation) {
+    case 2: ctx.transform(-1, 0, 0, 1, w, 0); break;  // 左右反転
+    case 3: ctx.transform(-1, 0, 0, -1, w, h); break; // 180度回転
+    case 4: ctx.transform(1, 0, 0, -1, 0, h); break;  // 上下反転
+    case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;   // 左右反転+反時計90度
+    case 6: ctx.transform(0, 1, -1, 0, h, 0); break;  // 時計回り90度
+    case 7: ctx.transform(0, -1, -1, 0, h, w); break; // 左右反転+時計90度
+    case 8: ctx.transform(0, -1, 1, 0, 0, w); break;  // 反時計回り90度
+    default: break; // 1: 補正不要
+  }
+}
+
 function resizeImage(file, maxPx) {
   return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    const exifReader = new FileReader();
+    exifReader.onload = (exifEvent) => {
+      const orientation = getExifOrientation(exifEvent.target.result);
+      const objectUrl = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
         let w = img.width, h = img.height;
@@ -487,18 +543,23 @@ function resizeImage(file, maxPx) {
           if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
           else        { w = Math.round(w * maxPx / h); h = maxPx; }
         }
+        const swapDims = orientation >= 5 && orientation <= 8;
         const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.width = swapDims ? h : w;
+        canvas.height = swapDims ? w : h;
+        const ctx = canvas.getContext('2d');
+        applyExifTransform(ctx, orientation, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(objectUrl);
         canvas.toBlob((blob) => {
           const r2 = new FileReader();
           r2.onload = (e2) => resolve({ dataURL: e2.target.result, mimeType: 'image/jpeg' });
           r2.readAsDataURL(blob);
         }, 'image/jpeg', 0.85);
       };
-      img.src = e.target.result;
+      img.src = objectUrl;
     };
-    reader.readAsDataURL(file);
+    exifReader.readAsArrayBuffer(file);
   });
 }
 
