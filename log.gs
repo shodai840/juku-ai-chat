@@ -334,3 +334,76 @@ function testLog() {
   const result = doPost(testData);
   Logger.log(result.getContent());
 }
+
+// ── Geminiモデル終了情報の変化を監視してLINEで知らせる ──
+// GeminiのAPIには終了日を機械的に取得する手段が無いため、Google公式の終了情報ページ
+// (deprecations)の内容が前回チェック時から変わったかどうかだけを見る、というシンプルな
+// 方式にしている。日付を直接パースしないので、ページのデザイン変更にも強い。
+const GEMINI_DEPRECATIONS_URL = 'https://ai.google.dev/gemini-api/docs/deprecations';
+
+// LINE Messaging APIへpush通知を送る（GAS版）。
+// スクリプトプロパティに LINE_CHANNEL_ACCESS_TOKEN・LINE_ADMIN_USER_ID の設定が必要。
+function sendLineNotificationFromGas(text) {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+  const to = props.getProperty('LINE_ADMIN_USER_ID');
+  if (!token || !to) {
+    console.error('LINE_CHANNEL_ACCESS_TOKEN / LINE_ADMIN_USER_ID がスクリプトプロパティに設定されていません');
+    return;
+  }
+  try {
+    UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + token },
+      payload: JSON.stringify({
+        to: to,
+        messages: [{ type: 'text', text: String(text).slice(0, 5000) }]
+      }),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    console.error('LINE通知送信失敗（無視）:', err);
+  }
+}
+
+// 【毎月自動実行】Geminiのモデル終了情報ページの内容が前回チェック時から変化していないか確認し、
+// 変化があればLINEで知らせる。初回実行時は比較対象がないため、通知は送らず基準値を保存するだけ。
+function checkGeminiDeprecationPageChange() {
+  let pageText;
+  try {
+    const res = UrlFetchApp.fetch(GEMINI_DEPRECATIONS_URL, { muteHttpExceptions: true });
+    pageText = res.getContentText();
+  } catch (err) {
+    console.error('終了情報ページの取得に失敗:', err);
+    return;
+  }
+
+  const currentHash = Utilities.base64Encode(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, pageText)
+  );
+  const props = PropertiesService.getScriptProperties();
+  const prevHash = props.getProperty('GEMINI_DEPRECATIONS_HASH');
+
+  if (prevHash && prevHash !== currentHash) {
+    sendLineNotificationFromGas(
+      '【お知らせ】Geminiのモデル終了情報ページが更新されました。\n終了予定日などが変わっていないか確認してください。\n' + GEMINI_DEPRECATIONS_URL
+    );
+  }
+  props.setProperty('GEMINI_DEPRECATIONS_HASH', currentHash);
+}
+
+// 【初回のみ手動実行】毎月1日の朝に checkGeminiDeprecationPageChange() を自動実行するトリガーを設定する。
+// Apps Scriptエディタで対象関数を「createDeprecationCheckTrigger」に選んでから「実行」してください
+// （初回は権限の承認が求められます）。すでに同名のトリガーがあれば一度削除してから作り直すので、
+// 設定をやり直したいときも同じ関数を実行するだけでOK。
+function createDeprecationCheckTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'checkGeminiDeprecationPageChange') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('checkGeminiDeprecationPageChange')
+    .timeBased()
+    .onMonthDay(1)
+    .atHour(9)
+    .create();
+}
