@@ -90,6 +90,11 @@ function resolveThinkingLevel(grade, className) {
   if (c.startsWith('S')) return 'MEDIUM'; // 中3Sクラス（難関高校志望）
   return 'LOW'; // 中学生のA・B・個別クラス
 }
+// 学年・クラスに応じて使用するGeminiのモデルを決める。
+// 「大学入試過去問」だけ精度優先のフルモデル、それ以外はコスト優先の軽量モデル。
+function resolveModel(grade, className) {
+  return grade === '大学入試過去問' ? 'gemini-3.5-flash' : 'gemini-3.1-flash-lite';
+}
 // ── 同一生徒の連続リクエスト制限（乱用防止：1分あたり8回まで）──
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 8;
@@ -214,9 +219,10 @@ export default async function handler(req, res) {
   };
   let reply = '';
   let usage = { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
+  const geminiModel = resolveModel(studentGrade, studentClass);
   try {
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,7 +243,8 @@ export default async function handler(req, res) {
         reply: `【APIエラー ${geminiRes.status}】` + errText.slice(0, 1500),
         promptTokenCount: 0,
         candidatesTokenCount: 0,
-        totalTokenCount: 0
+        totalTokenCount: 0,
+        model: geminiModel
       }));
       if (geminiRes.status === 429) {
         // エラー本文から「分あたり制限」か「日あたり制限」かを判別する
@@ -294,7 +301,8 @@ export default async function handler(req, res) {
       reply: '【通信エラー】' + String(err).slice(0, 500),
       promptTokenCount: 0,
       candidatesTokenCount: 0,
-      totalTokenCount: 0
+      totalTokenCount: 0,
+      model: geminiModel
     }));
     return res.status(500).json({
       error: 'AIとの通信でエラーが起きました。インターネット接続を確認してね。'
@@ -311,7 +319,8 @@ export default async function handler(req, res) {
     reply,
     promptTokenCount:     usage.promptTokenCount,
     candidatesTokenCount: usage.candidatesTokenCount,
-    totalTokenCount:      usage.totalTokenCount
+    totalTokenCount:      usage.totalTokenCount,
+    model: geminiModel
   }));
   return res.status(200).json({ reply });
 }
