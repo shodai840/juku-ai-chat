@@ -301,7 +301,7 @@ function createLogViews() {
   const logSheetName = logSheet.getName();
   const logView = ss.getSheetByName('質問ログ') || ss.insertSheet('質問ログ');
   logView.getRange('A1').setFormula(
-    `={'${logSheetName}'!A1:K1;SORT('${logSheetName}'!A2:K,1,FALSE)}`
+    `={'${logSheetName}'!A1:L1;SORT('${logSheetName}'!A2:L,1,FALSE)}`
   );
 
   const feedbackSheet = ss.getSheetByName(FEEDBACK_SHEET_NAME);
