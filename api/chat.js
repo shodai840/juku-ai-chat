@@ -219,8 +219,8 @@ export default async function handler(req, res) {
   };
   let reply = '';
   let usage = { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
+  const geminiModel = resolveModel(studentGrade, studentClass);
   try {
-    const geminiModel = resolveModel(studentGrade, studentClass);
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -243,7 +243,8 @@ export default async function handler(req, res) {
         reply: `【APIエラー ${geminiRes.status}】` + errText.slice(0, 1500),
         promptTokenCount: 0,
         candidatesTokenCount: 0,
-        totalTokenCount: 0
+        totalTokenCount: 0,
+        model: geminiModel
       }));
       if (geminiRes.status === 429) {
         // エラー本文から「分あたり制限」か「日あたり制限」かを判別する
@@ -300,7 +301,8 @@ export default async function handler(req, res) {
       reply: '【通信エラー】' + String(err).slice(0, 500),
       promptTokenCount: 0,
       candidatesTokenCount: 0,
-      totalTokenCount: 0
+      totalTokenCount: 0,
+      model: geminiModel
     }));
     return res.status(500).json({
       error: 'AIとの通信でエラーが起きました。インターネット接続を確認してね。'
@@ -317,7 +319,8 @@ export default async function handler(req, res) {
     reply,
     promptTokenCount:     usage.promptTokenCount,
     candidatesTokenCount: usage.candidatesTokenCount,
-    totalTokenCount:      usage.totalTokenCount
+    totalTokenCount:      usage.totalTokenCount,
+    model: geminiModel
   }));
   return res.status(200).json({ reply });
 }

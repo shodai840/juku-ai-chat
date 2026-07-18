@@ -67,7 +67,7 @@ function doPost(e) {
 
     // 1行目がヘッダーでなければ自動追加
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(['日時', '学年', 'クラス', '生徒名', '質問', '画像', 'AI回答', '入力Token', '出力Token', '合計Token', '本日の累計Token']);
+      sheet.appendRow(['日時', '学年', 'クラス', '生徒名', '質問', '画像', 'AI回答', '入力Token', '出力Token', '合計Token', '本日の累計Token', '使用モデル']);
     }
 
     sheet.appendRow([
@@ -81,7 +81,8 @@ function doPost(e) {
       data.promptTokenCount     || 0,
       data.candidatesTokenCount || 0,
       data.totalTokenCount      || 0,
-      '' // 本日の累計Token（この後 updateDailyCumulative() が書き込む）
+      '', // 本日の累計Token（この後 updateDailyCumulative() が書き込む）
+      data.model                || '' // L列: 実際に使用したGeminiのモデル名（料金計算で使う）
     ]);
 
     // 本日（サイト全体）の累計トークン数を計算し、K列に記録
