@@ -345,9 +345,15 @@
     /* ── KaTeX override ── */
     .katex { font-size: 1em; }
     /* 長い数式（$$...$$）が吹き出しからはみ出さないよう、数式部分だけ横スクロールにする。
-       縦方向はvisibleのままにしないと、分数など縦に高くなる数式の上下が切れてしまう。 */
-    .katex-display {
+       CSSの仕様上、同じ要素にoverflow-x:autoとoverflow-y:visibleを混在させると、
+       visibleの方が自動的にauto扱いになってしまい、分数など縦に高くなる数式の上下が
+       見えない縦スクロールで隠れてしまう不具合があった（実機で発覚）。
+       そのため横スクロール用の枠(.katex-display-wrap、app.jsでKaTeX描画後に自動挿入)を
+       別要素に分離し、.katex-display自体は縦方向も含め常にvisibleにする。 */
+    .katex-display-wrap {
       overflow-x: auto;
-      overflow-y: visible;
       max-width: 100%;
+    }
+    .katex-display {
+      overflow: visible;
     }

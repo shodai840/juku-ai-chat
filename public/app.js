@@ -26,6 +26,16 @@ function renderKaTeX(el) {
       ],
       throwOnError: false
     });
+    // 横スクロール用の枠を.katex-displayとは別要素に分離する（style.css参照）。
+    // 同じ要素にoverflow-x:autoとoverflow-y:visibleを混在させると、CSSの仕様で
+    // visibleの方が自動的にauto扱いになり、分数などの上下が縦スクロールで隠れてしまうため。
+    el.querySelectorAll('.katex-display').forEach(display => {
+      if (display.parentNode.classList.contains('katex-display-wrap')) return; // 二重ラップ防止
+      const wrap = document.createElement('div');
+      wrap.className = 'katex-display-wrap';
+      display.parentNode.insertBefore(wrap, display);
+      wrap.appendChild(display);
+    });
   } catch(e) {}
 }
 
