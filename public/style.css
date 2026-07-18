@@ -344,9 +344,10 @@
 
     /* ── KaTeX override ── */
     .katex { font-size: 1em; }
-    /* 長い数式（$$...$$）が吹き出しからはみ出さないよう、数式部分だけ横スクロールにする */
+    /* 長い数式（$$...$$）が吹き出しからはみ出さないよう、数式部分だけ横スクロールにする。
+       縦方向はvisibleのままにしないと、分数など縦に高くなる数式の上下が切れてしまう。 */
     .katex-display {
       overflow-x: auto;
-      overflow-y: hidden;
+      overflow-y: visible;
       max-width: 100%;
     }
