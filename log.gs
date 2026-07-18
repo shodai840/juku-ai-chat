@@ -163,6 +163,35 @@ function updateDailyCumulative() {
   sheet.getRange(lastRow, 11).setValue(prevCumulative + thisRowTokens); // K列（11列目）
 }
 
+// 【一度だけ手動実行】既存の全行のK列（本日の累計Token）を、日付ごとに正しく積算し直す。
+// 日付列の自動型変換バグ（cellValueToDateStr参照）により、過去の行の累計が正しく
+// 計算されていなかった分を修正するためのもの。K列以外は一切変更しない。何度実行しても
+// 結果は同じになるので安全。行は元々の並び順（appendRowによる時系列順）を前提にしている。
+function recalculateAllDailyCumulative() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
+                || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return; // ヘッダーのみの場合は何もしない
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 10).getValues(); // A〜J列
+  const kValues = [];
+  let currentDateStr = null;
+  let cumulative = 0;
+
+  data.forEach(row => {
+    const dateStr = cellValueToDateStr(row[0]);
+    const tokens = Number(row[9]) || 0; // J列: 合計Token
+    if (dateStr !== currentDateStr) {
+      currentDateStr = dateStr;
+      cumulative = 0;
+    }
+    cumulative += tokens;
+    kValues.push([cumulative]);
+  });
+
+  sheet.getRange(2, 11, kValues.length, 1).setValues(kValues); // K列に書き戻す
+}
+
 // A列(日時)のセルの値から日付部分だけを取り出してDateにする。パースできなければnull。
 // セルがGoogleスプレッドシートによって自動的に日付型に変換されている場合（Dateオブジェクト）と、
 // 文字列のまま保持されている場合の両方に対応する（cellValueToDateStr参照）。
