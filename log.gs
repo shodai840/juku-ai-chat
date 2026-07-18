@@ -128,6 +128,18 @@ function handleFeedback(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// A列(日時)のセルの値を'yyyy-MM-dd'の文字列にする。
+// Googleスプレッドシートは「2026-07-17 22:51:10」のような文字列を自動的に日付型に
+// 変換してしまうことがあり、その場合getValue()は文字列ではなくDateオブジェクトを返す。
+// 単純な文字列前方一致judgementだとDateオブジェクトのtoString()（例："Fri Jul 17..."）とは
+// 一致しないため、型に応じて処理を分ける。
+function cellValueToDateStr(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, 'Asia/Tokyo', 'yyyy-MM-dd');
+  }
+  return String(value || '').slice(0, 10);
+}
+
 // 本日（サイト全体・全生徒合計）の累計トークン数を計算し、最終行のK列に書き込む
 // 全行を読み直すのではなく、直前の行だけを見て前回の累計に今回分を足す（行数が増えても処理時間は一定）
 function updateDailyCumulative() {
@@ -141,8 +153,8 @@ function updateDailyCumulative() {
 
   let prevCumulative = 0;
   if (lastRow > 2) {
-    const prevTimestamp = String(sheet.getRange(lastRow - 1, 1).getValue() || '');
-    if (prevTimestamp.indexOf(todayStr) === 0) {
+    const prevTimestampValue = sheet.getRange(lastRow - 1, 1).getValue();
+    if (cellValueToDateStr(prevTimestampValue) === todayStr) {
       prevCumulative = Number(sheet.getRange(lastRow - 1, 11).getValue()) || 0; // 直前行のK列（累計）
     }
     // 直前行が今日でなければ（日をまたいだ）、今回分だけからスタート
@@ -151,9 +163,14 @@ function updateDailyCumulative() {
   sheet.getRange(lastRow, 11).setValue(prevCumulative + thisRowTokens); // K列（11列目）
 }
 
-// タイムスタンプ文字列（'yyyy-MM-dd HH:mm:ss'）の先頭から日付部分だけを取り出してDateにする。パースできなければnull
-function parseLogDate(str) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(str || ''));
+// A列(日時)のセルの値から日付部分だけを取り出してDateにする。パースできなければnull。
+// セルがGoogleスプレッドシートによって自動的に日付型に変換されている場合（Dateオブジェクト）と、
+// 文字列のまま保持されている場合の両方に対応する（cellValueToDateStr参照）。
+function parseLogDate(value) {
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
   if (!m) return null;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   return isNaN(d.getTime()) ? null : d;
