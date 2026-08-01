@@ -47,6 +47,30 @@ function getStudentName()  { return sessionStorage.getItem('studentName')  || ''
 function getStudentGrade() { return sessionStorage.getItem('studentGrade') || ''; }
 function getStudentClass() { return sessionStorage.getItem('studentClass') || ''; }
 
+// ── 学年・クラスの年度またぎ保存（同じ年度内なら端末に残し、毎回聞き直さない）──
+// 日本の学年度は4月始まりなので、1〜3月は前年度の扱いにする
+function getCurrentSchoolYear() {
+  const now = new Date();
+  return now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+}
+function gradeStorageKey(name) { return 'savedGrade_' + name; }
+function saveGradeForThisYear(name, grade, className) {
+  try {
+    localStorage.setItem(gradeStorageKey(name), JSON.stringify({ grade, className, schoolYear: getCurrentSchoolYear() }));
+  } catch (e) {}
+}
+// 今年度内に保存された学年・クラスがあれば{grade, className}を返す。無い・年度が違えばnull
+// （同じ端末でも生徒名ごとに保存を分けているので、別の生徒がログインしても前の生徒の学年は使われない）
+function loadGradeForThisYear(name) {
+  try {
+    const raw = localStorage.getItem(gradeStorageKey(name));
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (data.schoolYear !== getCurrentSchoolYear()) return null;
+    return { grade: data.grade, className: data.className || '' };
+  } catch (e) { return null; }
+}
+
 // ── ログイン認証（JWT）管理 ──
 function getAuthToken()   { return sessionStorage.getItem('authToken') || ''; }
 function setAuthToken(t)  { sessionStorage.setItem('authToken', t); }
@@ -150,6 +174,7 @@ document.getElementById('btn-name-ok').addEventListener('click', async () => {
   // sessionStorage・サーバーの順に会話履歴の復元を試みる（restoreOrGreetForNewSession任せにする）
   const isFirstTime = !getStudentGrade();
   setStudentInfo(getStudentName(), grade, className);
+  saveGradeForThisYear(getStudentName(), grade, className);
   hideGradeModal();
 
   if (isFirstTime) {
@@ -244,8 +269,14 @@ async function restoreOrGreetForNewSession() {
 
 // ログイン成功後、学年・クラスが未入力ならそちらのモーダルへ、入力済みならそのままチャットを再開する
 async function afterLogin() {
-  const grade = getStudentGrade();
-  const className = getStudentClass();
+  let grade = getStudentGrade();
+  let className = getStudentClass();
+  if (!grade) {
+    // このタブでは未入力（ブラウザを閉じた後の再ログイン等）でも、同じ年度内に選んだ
+    // 学年・クラスが端末に残っていればそれを使い、毎回選び直さなくていいようにする
+    const saved = loadGradeForThisYear(getStudentName());
+    if (saved) { grade = saved.grade; className = saved.className; }
+  }
   const classOk = isHighSchool(grade) || className;
   if (!grade || !classOk) {
     showGradeModal();
