@@ -9,6 +9,9 @@ let pendingImageBase64 = null;
 let pendingImageMimeType = null;
 let isSending = false;
 let katexReady = false;
+let oldestLoadedAt = null;   // サーバーから読み込んだ会話履歴のうち一番古いもののcreated_at（追加読み込み用のカーソル）
+let hasMoreServerHistory = false; // まだサーバー側に古い履歴が残っているか
+let isLoadingOlderHistory = false;
 
 // ── KaTeX初期化 ──
 function initKaTeX() {
@@ -184,8 +187,38 @@ function hideAuthError(elId) {
   el.classList.remove('visible');
 }
 
+// 履歴エントリ（user/model/divider）を順番に画面へ描画する。lastUserTextはAIの吹き出しの
+// フィードバック送信時に「どの質問への回答か」を渡すために、直前のuser発言を追いかけておく
+function renderHistoryEntries(entries) {
+  let lastUserText = '';
+  entries.forEach(h => {
+    if (h.role === 'user') { addUserBubble(h.text, null); lastUserText = h.text; }
+    else if (h.role === 'model') addAIBubble(h.text, lastUserText);
+    else if (h.role === 'divider') addDividerMsg(h.text);
+  });
+}
+
+// ブラウザを閉じた後（sessionStorageが空）でも会話を見返せるよう、サーバーに保存された
+// 直近の会話履歴を取得する。取得できなくても通常の新規会話として続行できるよう、
+// 失敗時は空配列を返すだけにする（致命的エラーにしない）。
+async function fetchInitialServerHistory() {
+  try {
+    const res = await fetch('/api/history?limit=50', {
+      headers: { Authorization: 'Bearer ' + getAuthToken() }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const messages = Array.isArray(data.messages) ? data.messages : [];
+    hasMoreServerHistory = !!data.hasMore;
+    oldestLoadedAt = messages.length > 0 ? messages[0].createdAt : null;
+    return messages;
+  } catch (err) {
+    return [];
+  }
+}
+
 // ログイン成功後、学年・クラスが未入力ならそちらのモーダルへ、入力済みならそのままチャットを再開する
-function afterLogin() {
+async function afterLogin() {
   const grade = getStudentGrade();
   const className = getStudentClass();
   const classOk = isHighSchool(grade) || className;
@@ -196,16 +229,21 @@ function afterLogin() {
   setStudentInfo(getStudentName(), grade, className);
   history = loadHistory();
   if (history.length > 0) {
-    let lastUserText = '';
-    history.forEach(h => {
-      if (h.role === 'user') { addUserBubble(h.text, null); lastUserText = h.text; }
-      else if (h.role === 'model') addAIBubble(h.text, lastUserText);
-      else if (h.role === 'divider') addDividerMsg(h.text);
-    });
+    renderHistoryEntries(history);
     addSystemMsg('おかえり、' + getStudentName() + ' さん！ 続きから質問できるよ 😊');
   } else {
-    addSystemMsg('おかえり、' + getStudentName() + ' さん！ 質問を入力してね 😊');
-    addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
+    // このタブでは初回（sessionStorageが空）。ブラウザを閉じる前の会話がサーバーに
+    // 残っていれば復元する（無ければ通常の新規会話として続ける）
+    const serverMessages = await fetchInitialServerHistory();
+    if (serverMessages.length > 0) {
+      history = serverMessages.map(m => ({ role: m.role, text: m.text }));
+      renderHistoryEntries(history);
+      saveHistory();
+      addSystemMsg('おかえり、' + getStudentName() + ' さん！ 続きから質問できるよ 😊');
+    } else {
+      addSystemMsg('おかえり、' + getStudentName() + ' さん！ 質問を入力してね 😊');
+      addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
+    }
   }
 }
 
@@ -321,15 +359,19 @@ function addSystemMsg(text) {
   scrollBottom();
 }
 
-function addDividerMsg(text) {
+function buildDividerNode(text) {
   const div = document.createElement('div');
   div.className = 'history-divider';
   div.textContent = text;
-  document.getElementById('chat-area').appendChild(div);
+  return div;
+}
+
+function addDividerMsg(text) {
+  document.getElementById('chat-area').appendChild(buildDividerNode(text));
   scrollBottom();
 }
 
-function addUserBubble(text, imageDataURL) {
+function buildUserBubbleNode(text, imageDataURL) {
   const row = document.createElement('div');
   row.className = 'msg-row user';
   const av = document.createElement('div');
@@ -347,7 +389,11 @@ function addUserBubble(text, imageDataURL) {
     bubble.appendChild(img);
   }
   row.appendChild(bubble); row.appendChild(av);
-  document.getElementById('chat-area').appendChild(row);
+  return row;
+}
+
+function addUserBubble(text, imageDataURL) {
+  document.getElementById('chat-area').appendChild(buildUserBubbleNode(text, imageDataURL));
   scrollBottom();
 }
 
@@ -397,6 +443,39 @@ function renderFormattedLine(line) {
   return frag;
 }
 
+// AIの回答テキストをbubbleへ描画する。
+// $$...$$（独立行）は\begin{cases}...\end{cases}のように複数行にまたがることがあり、
+// 先に改行を<br>へ変換してしまうと数式が別々のテキストノードに分断され、KaTeXが
+// $$〜$$のペアを見つけられず生のLaTeXコードがそのまま表示されてしまう不具合があった。
+// そのため、$$...$$・$...$の数式部分は改行ごと1つのテキストノードとして丸ごと残し、
+// それ以外の地の文だけ改行を<br>に変換して**太字**・==ハイライト==を処理する。
+function renderFormattedText(bubble, text) {
+  const mathPattern = /\$\$[\s\S]*?\$\$|\$[^\n$]+?\$/g;
+  const segments = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = mathPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) segments.push({ isMath: false, content: text.slice(lastIndex, match.index) });
+    segments.push({ isMath: true, content: match[0] });
+    lastIndex = mathPattern.lastIndex;
+  }
+  if (lastIndex < text.length) segments.push({ isMath: false, content: text.slice(lastIndex) });
+
+  let isFirstLine = true;
+  segments.forEach(seg => {
+    if (seg.isMath) {
+      bubble.appendChild(document.createTextNode(seg.content));
+      isFirstLine = false;
+      return;
+    }
+    seg.content.split('\n').forEach(line => {
+      if (!isFirstLine) bubble.appendChild(document.createElement('br'));
+      if (line) bubble.appendChild(renderFormattedLine(line));
+      isFirstLine = false;
+    });
+  });
+}
+
 // AIの回答への👍👎フィードバックをサーバーに送る
 async function sendFeedback(feedback, questionText, aiReply, containerEl) {
   containerEl.innerHTML = '';
@@ -425,7 +504,7 @@ async function sendFeedback(feedback, questionText, aiReply, containerEl) {
   }
 }
 
-function addAIBubble(text, questionText) {
+function buildAIBubbleNode(text, questionText) {
   const row = document.createElement('div');
   row.className = 'msg-row model';
   const av = document.createElement('div');
@@ -435,12 +514,7 @@ function addAIBubble(text, questionText) {
 
   // XSS対策：テキストノード・要素生成で安全に処理（innerHTMLは使わない）
   // $...$や$$...$$はKaTeXが後段で処理する
-  // 改行を<br>に変換しつつ、**太字**・==ハイライト==だけ要素化して描画
-  const lines = text.split('\n');
-  lines.forEach((line, i) => {
-    if (i > 0) bubble.appendChild(document.createElement('br'));
-    bubble.appendChild(renderFormattedLine(line));
-  });
+  renderFormattedText(bubble, text);
 
   const footer = document.createElement('span');
   footer.className = 'ai-footer';
@@ -461,6 +535,11 @@ function addAIBubble(text, questionText) {
   bubble.appendChild(feedbackRow);
 
   row.appendChild(av); row.appendChild(bubble);
+  return { row, bubble };
+}
+
+function addAIBubble(text, questionText) {
+  const { row, bubble } = buildAIBubbleNode(text, questionText);
   document.getElementById('chat-area').appendChild(row);
   renderKaTeX(bubble);
   scrollBottom();
@@ -484,6 +563,71 @@ function scrollBottom() {
   const area = document.getElementById('chat-area');
   area.scrollTop = area.scrollHeight;
 }
+
+// ── 過去の会話履歴の追加読み込み（一番上までスクロールしたら自動で古い分を読み込む）──
+function buildHistoryEntryNode(h, lastUserTextRef) {
+  if (h.role === 'user') {
+    lastUserTextRef.text = h.text;
+    return buildUserBubbleNode(h.text, null);
+  }
+  if (h.role === 'model') {
+    const { row, bubble } = buildAIBubbleNode(h.text, lastUserTextRef.text);
+    renderKaTeX(bubble);
+    return row;
+  }
+  if (h.role === 'divider') return buildDividerNode(h.text);
+  return null;
+}
+
+async function loadOlderHistoryIfNeeded() {
+  if (isLoadingOlderHistory || !hasMoreServerHistory || !oldestLoadedAt) return;
+  const area = document.getElementById('chat-area');
+  if (area.scrollTop > 40) return; // 一番上付近まで来ていなければ何もしない
+
+  isLoadingOlderHistory = true;
+  const loadingEl = document.createElement('div');
+  loadingEl.style.cssText = 'text-align:center;font-size:0.78rem;color:var(--color-muted);padding:6px 0;';
+  loadingEl.textContent = '過去の会話を読み込み中…';
+  area.insertBefore(loadingEl, area.firstChild);
+
+  try {
+    const res = await fetch(`/api/history?limit=50&before=${encodeURIComponent(oldestLoadedAt)}`, {
+      headers: { Authorization: 'Bearer ' + getAuthToken() }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const olderMessages = Array.isArray(data.messages) ? data.messages : [];
+    hasMoreServerHistory = !!data.hasMore;
+    if (olderMessages.length > 0) {
+      oldestLoadedAt = olderMessages[0].createdAt;
+
+      // 直前（＝この追加読み込みバッチより後ろ）のuser発言を、フィードバック送信用に引き継ぐ
+      const lastUserTextRef = { text: '' };
+      const fragment = document.createDocumentFragment();
+      olderMessages.forEach(m => {
+        const node = buildHistoryEntryNode(m, lastUserTextRef);
+        if (node) fragment.appendChild(node);
+      });
+
+      const prevScrollHeight = area.scrollHeight;
+      area.insertBefore(fragment, loadingEl);
+      // 先頭に追加した分だけ見た目の位置がずれないよう、増えた高さ分スクロール位置を補正する
+      area.scrollTop += area.scrollHeight - prevScrollHeight;
+
+      history = [...olderMessages.map(m => ({ role: m.role, text: m.text })), ...history];
+      saveHistory();
+    }
+  } catch (err) {
+    // 読み込み失敗してもチャット自体は使えるので、静かに諦める
+  } finally {
+    loadingEl.remove();
+    isLoadingOlderHistory = false;
+  }
+}
+
+document.getElementById('chat-area').addEventListener('scroll', () => {
+  loadOlderHistoryIfNeeded();
+});
 
 // ── 画像処理 ──
 // JPEGのEXIF Orientationタグ(1〜8)を読み取る。EXIFが無い/JPEGでない/壊れている場合は

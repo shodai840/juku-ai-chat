@@ -3,6 +3,7 @@
 // Gemini API中継 + Google Apps Scriptへログ送信
 import { waitUntil } from '@vercel/functions';
 import { verifyAuth } from '../lib/auth/verifyAuth.js';
+import { insertMessages } from '../lib/supabase.js';
 
 const SYSTEM_PROMPT = `あなたは学習塾の生徒をサポートするAI家庭教師です。相手は小中高校生で、特に中学生が多いです。
 【最重要ルール】
@@ -324,5 +325,14 @@ export default async function handler(req, res) {
     totalTokenCount:      usage.totalTokenCount,
     model: geminiModel
   }));
+  // ブラウザを閉じた後でも生徒が会話を見返せるよう、質問・回答をアカウントに紐づけて保存する。
+  // 画像そのものは保存しない（他のログ保存と同じ方針）ため、画像のみの質問はプレースホルダーで記録。
+  const userMessageText = message || '（画像で質問した）';
+  waitUntil(
+    insertMessages([
+      { student_id: student.id, role: 'user', text: userMessageText },
+      { student_id: student.id, role: 'model', text: reply }
+    ]).catch(err => console.error('会話履歴の保存失敗（無視）:', err))
+  );
   return res.status(200).json({ reply });
 }
