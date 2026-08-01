@@ -96,7 +96,7 @@ function resolveThinkingLevel(grade, className) {
 // 学年・クラスに応じて使用するGeminiのモデルを決める。
 // 「大学入試過去問」だけ精度優先のフルモデル、それ以外はコスト優先の軽量モデル。
 function resolveModel(grade, className) {
-  return grade === '大学入試過去問' ? 'gemini-3.5-flash' : 'gemini-3.1-flash-lite';
+  return grade === '大学入試過去問' ? 'gemini-3.5-flash' : 'gemini-3.5-flash-lite';
 }
 // ── 同一生徒の連続リクエスト制限（乱用防止：1分あたり8回まで）──
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
