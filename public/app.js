@@ -138,20 +138,22 @@ function hideGradeModal() {
   document.getElementById('modal-overlay').classList.remove('active');
 }
 
-document.getElementById('btn-name-ok').addEventListener('click', () => {
+document.getElementById('btn-name-ok').addEventListener('click', async () => {
   const grade    = document.getElementById('grade-select').value;
   const className = document.getElementById('class-select').value;
   if (!grade)     { showModalError('学年をえらんでね'); return; }
   if (!isHighSchool(grade) && !className) { showModalError('クラスをえらんでね'); return; }
   hideModalError();
 
+  // 学年が未入力だった＝ログイン直後（新規登録 or ブラウザを閉じた後の再ログイン）で
+  // このモーダルに来たケース。その場合は会話を再開する必要があるので、単なる挨拶で終わらせず
+  // sessionStorage・サーバーの順に会話履歴の復元を試みる（restoreOrGreetForNewSession任せにする）
   const isFirstTime = !getStudentGrade();
   setStudentInfo(getStudentName(), grade, className);
   hideGradeModal();
 
   if (isFirstTime) {
-    addSystemMsg('こんにちは、' + getStudentName() + ' さん！ 質問を気軽に入力してね 😊');
-    addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
+    await restoreOrGreetForNewSession();
   } else {
     addSystemMsg('学年・クラスを更新したよ！');
   }
@@ -217,6 +219,29 @@ async function fetchInitialServerHistory() {
   }
 }
 
+// このタブでの会話表示を再開する（sessionStorageにあればそれを使い、無ければサーバーから
+// 復元を試みる）。ログイン直後・学年クラス初回入力後のどちらからも呼ばれる想定
+async function restoreOrGreetForNewSession() {
+  history = loadHistory();
+  if (history.length > 0) {
+    renderHistoryEntries(history);
+    addSystemMsg('おかえり、' + getStudentName() + ' さん！ 続きから質問できるよ 😊');
+    return;
+  }
+  // このタブでは初回（sessionStorageが空）。ブラウザを閉じる前の会話がサーバーに
+  // 残っていれば復元する（無ければ通常の新規会話として続ける）
+  const serverMessages = await fetchInitialServerHistory();
+  if (serverMessages.length > 0) {
+    history = serverMessages.map(m => ({ role: m.role, text: m.text }));
+    renderHistoryEntries(history);
+    saveHistory();
+    addSystemMsg('おかえり、' + getStudentName() + ' さん！ 続きから質問できるよ 😊');
+  } else {
+    addSystemMsg('おかえり、' + getStudentName() + ' さん！ 質問を入力してね 😊');
+    addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
+  }
+}
+
 // ログイン成功後、学年・クラスが未入力ならそちらのモーダルへ、入力済みならそのままチャットを再開する
 async function afterLogin() {
   const grade = getStudentGrade();
@@ -227,24 +252,7 @@ async function afterLogin() {
     return;
   }
   setStudentInfo(getStudentName(), grade, className);
-  history = loadHistory();
-  if (history.length > 0) {
-    renderHistoryEntries(history);
-    addSystemMsg('おかえり、' + getStudentName() + ' さん！ 続きから質問できるよ 😊');
-  } else {
-    // このタブでは初回（sessionStorageが空）。ブラウザを閉じる前の会話がサーバーに
-    // 残っていれば復元する（無ければ通常の新規会話として続ける）
-    const serverMessages = await fetchInitialServerHistory();
-    if (serverMessages.length > 0) {
-      history = serverMessages.map(m => ({ role: m.role, text: m.text }));
-      renderHistoryEntries(history);
-      saveHistory();
-      addSystemMsg('おかえり、' + getStudentName() + ' さん！ 続きから質問できるよ 😊');
-    } else {
-      addSystemMsg('おかえり、' + getStudentName() + ' さん！ 質問を入力してね 😊');
-      addSystemMsg('別の問題を聞きたくなったら、「次の問題」ボタンを押してね');
-    }
-  }
+  await restoreOrGreetForNewSession();
 }
 
 async function handleLogin() {
