@@ -43,7 +43,7 @@ function renderKaTeX(el) {
 }
 
 // ── 名前・学年・クラス管理 ──
-function getStudentName()  { return sessionStorage.getItem('studentName')  || ''; }
+function getStudentName()  { return localStorage.getItem('studentName')  || ''; }
 function getStudentGrade() { return sessionStorage.getItem('studentGrade') || ''; }
 function getStudentClass() { return sessionStorage.getItem('studentClass') || ''; }
 
@@ -72,9 +72,13 @@ function loadGradeForThisYear(name) {
 }
 
 // ── ログイン認証（JWT）管理 ──
-function getAuthToken()   { return sessionStorage.getItem('authToken') || ''; }
-function setAuthToken(t)  { sessionStorage.setItem('authToken', t); }
-function clearAuthToken() { sessionStorage.removeItem('authToken'); }
+// ブラウザを閉じても再ログイン不要にするため、localStorageに保存する（JWT自体の有効期限は30日）。
+// 端末が生徒一人一台になり共用端末での漏えいリスクが下がったための対応。
+// サーバー側は毎回Supabaseの承認状態を再チェックするので、承認取り消しはトークンの有効期限を
+// 待たずに即座に反映される
+function getAuthToken()   { return localStorage.getItem('authToken') || ''; }
+function setAuthToken(t)  { localStorage.setItem('authToken', t); }
+function clearAuthToken() { localStorage.removeItem('authToken'); }
 
 // 高校生かどうか（高校生はクラスなし）
 function isHighSchool(grade) { return (grade || '').startsWith('高') || grade === '大学入試過去問'; }
@@ -105,7 +109,7 @@ function getContextHistory() {
 }
 
 function setStudentInfo(name, grade, className) {
-  sessionStorage.setItem('studentName', name);
+  localStorage.setItem('studentName', name);
   sessionStorage.setItem('studentGrade', grade);
   sessionStorage.setItem('studentClass', className);
   document.getElementById('student-name-disp').textContent = className
@@ -306,7 +310,7 @@ async function handleLogin() {
       return;
     }
     setAuthToken(data.token);
-    sessionStorage.setItem('studentName', data.name);
+    localStorage.setItem('studentName', data.name);
     document.getElementById('login-password-input').value = '';
     hideAuthModal();
     afterLogin();
@@ -343,7 +347,7 @@ async function handleRegister() {
     // 自動承認モードでトークンが発行された場合は、そのままログイン状態にして始める
     if (data.token) {
       setAuthToken(data.token);
-      sessionStorage.setItem('studentName', data.name);
+      localStorage.setItem('studentName', data.name);
       hideAuthModal();
       afterLogin();
       return;
@@ -369,7 +373,7 @@ document.getElementById('register-password-input').addEventListener('keydown', (
 // トークンが無効・失効していた場合の共通処理：ログイン情報を消してログイン画面に戻す
 function handleAuthFailure(message) {
   clearAuthToken();
-  sessionStorage.removeItem('studentName');
+  localStorage.removeItem('studentName');
   sessionStorage.removeItem('studentGrade');
   sessionStorage.removeItem('studentClass');
   clearHistory();
@@ -381,7 +385,7 @@ function handleAuthFailure(message) {
 
 document.getElementById('btn-logout').addEventListener('click', () => {
   clearAuthToken();
-  sessionStorage.removeItem('studentName');
+  localStorage.removeItem('studentName');
   sessionStorage.removeItem('studentGrade');
   sessionStorage.removeItem('studentClass');
   clearHistory();
