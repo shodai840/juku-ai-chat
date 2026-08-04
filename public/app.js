@@ -166,6 +166,60 @@ function hideGradeModal() {
   document.getElementById('modal-overlay').classList.remove('active');
 }
 
+// ── 使い方ガイド（新規登録直後に自動表示、ヘッダーの❓からいつでも見返せる）──
+let guidePageIndex = 0;
+let guideOnFinish = null; // ガイドを閉じたときに呼ぶ処理。新規登録直後の自動表示のときだけ設定する
+function guidePages() { return document.querySelectorAll('.guide-page'); }
+
+function renderGuideDots() {
+  const dotsEl = document.getElementById('guide-dots');
+  dotsEl.innerHTML = '';
+  guidePages().forEach((_, i) => {
+    const dot = document.createElement('span');
+    dot.className = 'guide-dot' + (i === guidePageIndex ? ' active' : '');
+    dotsEl.appendChild(dot);
+  });
+}
+
+function showGuidePage(index) {
+  const pages = guidePages();
+  guidePageIndex = Math.max(0, Math.min(index, pages.length - 1));
+  pages.forEach((p, i) => p.classList.toggle('active', i === guidePageIndex));
+  renderGuideDots();
+  document.getElementById('btn-guide-next').textContent =
+    guidePageIndex === pages.length - 1 ? 'はじめる' : '次へ';
+  // 1ページ目には戻る先が無いので隠す（場所は確保したままレイアウトのズレを防ぐ）
+  document.getElementById('btn-guide-back').classList.toggle('hidden', guidePageIndex === 0);
+}
+
+// onFinish：ガイドを最後まで見た/スキップしたときに実行する処理（省略可）
+function showGuide(onFinish) {
+  guideOnFinish = onFinish || null;
+  showGuidePage(0);
+  document.getElementById('guide-overlay').classList.add('active');
+}
+
+function closeGuide() {
+  document.getElementById('guide-overlay').classList.remove('active');
+  const cb = guideOnFinish;
+  guideOnFinish = null;
+  if (cb) cb();
+}
+
+document.getElementById('btn-guide-next').addEventListener('click', () => {
+  const pages = guidePages();
+  if (guidePageIndex >= pages.length - 1) {
+    closeGuide();
+  } else {
+    showGuidePage(guidePageIndex + 1);
+  }
+});
+document.getElementById('btn-guide-back').addEventListener('click', () => {
+  if (guidePageIndex > 0) showGuidePage(guidePageIndex - 1);
+});
+document.getElementById('btn-guide-skip').addEventListener('click', closeGuide);
+document.getElementById('btn-guide').addEventListener('click', () => showGuide(null));
+
 document.getElementById('btn-name-ok').addEventListener('click', async () => {
   const grade    = document.getElementById('grade-select').value;
   const className = document.getElementById('class-select').value;
@@ -349,13 +403,14 @@ async function handleRegister() {
       setAuthToken(data.token);
       localStorage.setItem('studentName', data.name);
       hideAuthModal();
-      afterLogin();
+      showGuide(() => afterLogin());
       return;
     }
 
     const successEl = document.getElementById('register-success');
     successEl.textContent = data.message || '登録を受け付けました。先生が承認するまで少し待ってから、ログインしてね。';
     successEl.classList.add('visible');
+    showGuide(() => switchAuthTab('login'));
   } catch (err) {
     showAuthError('register-error', '通信エラーが起きました。もう一度試してね。');
   } finally {
