@@ -102,6 +102,42 @@ function doPost(e) {
   }
 }
 
+// 管理画面（admin.html）から週次利用状況を取得するためのGETエンドポイント。
+// 例: ?action=weeklyUsage&weeks=2&secret=... で、今週（進行中）を含む直近N週分を
+// 新しい週から順に返す。認証はdoPostと同じ共有シークレットを流用する
+// （LOG_SHARED_SECRET未設定の間は誰でも呼べる＝doPostと同じ後方互換動作）。
+function doGet(e) {
+  const params = (e && e.parameter) || {};
+  const requiredSecret = getRequiredSecret();
+  if (requiredSecret && params.secret !== requiredSecret) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'error', message: 'unauthorized' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (params.action === 'weeklyUsage') {
+    const weeksCount = Math.min(Math.max(parseInt(params.weeks, 10) || 2, 1), 8);
+    const thisMonday = getThisMonday(new Date());
+    const weeks = [];
+    for (let i = 0; i < weeksCount; i++) {
+      const weekStart = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7 * i);
+      const rows = computeWeeklyUsageRows(weekStart);
+      weeks.push({
+        weekStart: Utilities.formatDate(weekStart, 'Asia/Tokyo', 'yyyy-MM-dd'),
+        isCurrentWeek: i === 0, // 今週分は「まだ終わっていない進行中の週」であることに注意
+        students: rows.map(r => ({ name: r[1], count: r[2], tokens: r[3] }))
+      });
+    }
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'ok', weeks: weeks }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ status: 'error', message: 'unknown action' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 // フィードバック（👍/👎）を専用シートに1行追記する（doPost内のロックの中から呼ばれる）
 function handleFeedback(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FEEDBACK_SHEET_NAME)
@@ -213,14 +249,14 @@ function getThisMonday(now) {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
 }
 
-// [weekStart, weekStart+7日) の範囲で生徒ごとの質問回数・合計Tokenを集計し、
-// 「週次利用状況」シートの先頭（ヘッダーの直後）に追記する（無ければ結果を返すだけで何も書かない）。
-// 戻り値は書き込んだ行数（0なら対象期間の利用者なし）。
-function aggregateUsageForWeek(weekStart) {
+// [weekStart, weekStart+7日) の範囲で生徒ごとの質問回数・合計Tokenを計算する
+// （シートへの書き込みはしない、純粋な集計のみ）。質問回数の多い順にソートして返す。
+// 戻り値の各行は [週開始日(yyyy-MM-dd文字列), 生徒名, 質問回数, 合計Token]。
+function computeWeeklyUsageRows(weekStart) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                 || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 0; // ログがまだない
+  if (lastRow < 2) return []; // ログがまだない
 
   const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7);
   const weekStartStr = Utilities.formatDate(weekStart, 'Asia/Tokyo', 'yyyy-MM-dd');
@@ -239,20 +275,33 @@ function aggregateUsageForWeek(weekStart) {
     usageByStudent[studentName].tokens += tokens;
   });
 
-  const rows = Object.keys(usageByStudent)
+  return Object.keys(usageByStudent)
     .map(name => [weekStartStr, name, usageByStudent[name].count, usageByStudent[name].tokens])
     .sort((a, b) => b[2] - a[2]); // 質問回数の多い順
+}
 
+// [weekStart, weekStart+7日) の範囲で生徒ごとの質問回数・合計Tokenを集計し、
+// 「週次利用状況」シートの一番左に新しい4列（週開始日・生徒名・質問回数・合計Token）の
+// ブロックとして追加する（無ければ結果を返すだけで何も書かない）。既存の週は右へ押し出される
+// ので、左から右に新しい週→古い週の順に並ぶ（週ごとに生徒数が違っても各ブロックは独立している
+// ので問題ない）。
+// 戻り値は書き込んだ行数（0なら対象期間の利用者なし）。
+function aggregateUsageForWeek(weekStart) {
+  const rows = computeWeeklyUsageRows(weekStart);
   if (rows.length === 0) return 0; // その週の利用者がいなければ何も書かない
 
   const weeklySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(WEEKLY_SHEET_NAME)
                        || SpreadsheetApp.getActiveSpreadsheet().insertSheet(WEEKLY_SHEET_NAME);
-  if (weeklySheet.getLastRow() === 0) {
-    weeklySheet.appendRow(['週開始日（月）', '生徒名', '質問回数', '合計Token']);
+  // 新しい週を一番左に5列挿入し（データ4列＋見やすさのための空白1列）、既存の週（ブロックごと）を右へ押し出す
+  if (weeklySheet.getLastColumn() > 0) {
+    weeklySheet.insertColumnsBefore(1, 5);
   }
-  // 新しい週を一番上（ヘッダーの直後）に挿入し、古い週は下に押し出す
-  weeklySheet.insertRowsAfter(1, rows.length);
+  weeklySheet.getRange(1, 1, 1, 4).setValues([['週開始日（月）', '生徒名', '質問回数', '合計Token']]);
   weeklySheet.getRange(2, 1, rows.length, 4).setValues(rows);
+  // insertColumnsBefore()は挿入した列に、直前までその位置にあった列（週開始日＝日付形式）の
+  // 書式を引き継いでしまうことがある。質問回数・合計Tokenの数値列が日付として表示される
+  // 不具合の対処として、明示的にプレーンな数値書式にリセットする。
+  weeklySheet.getRange(2, 3, rows.length, 2).setNumberFormat('0');
   return rows.length;
 }
 
@@ -391,6 +440,15 @@ function checkGeminiDeprecationPageChange() {
     );
   }
   props.setProperty('GEMINI_DEPRECATIONS_HASH', currentHash);
+}
+
+// 【テスト用・手動実行】LINEに実際に届く通知の見た目だけを確認したいときに使う。
+// checkGeminiDeprecationPageChange() のハッシュ比較（＝本番の変化検知の状態）には一切影響しない。
+// Apps Scriptエディタで対象関数を「testDeprecationNotification」に選んでから「実行」してください。
+function testDeprecationNotification() {
+  sendLineNotificationFromGas(
+    '【お知らせ】Geminiのモデル終了情報ページが更新されました。\n終了予定日などが変わっていないか確認してください。\n' + GEMINI_DEPRECATIONS_URL
+  );
 }
 
 // 【初回のみ手動実行】毎月1日の朝に checkGeminiDeprecationPageChange() を自動実行するトリガーを設定する。

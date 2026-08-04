@@ -118,6 +118,20 @@
   #auto-approve-label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: var(--color-danger); font-weight: 700; }
   #btn-logout { flex-shrink: 0; }
   #empty-msg { padding: 30px; text-align: center; color: var(--color-muted); }
+
+  /* ── 週次利用状況 ── */
+  #weekly-usage-section {
+    background: var(--color-surface); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  }
+  #weekly-usage-section h3 { font-size: 0.92rem; margin-bottom: 10px; color: var(--color-primary); }
+  #weekly-usage-cols { display: flex; gap: 16px; flex-wrap: wrap; }
+  .weekly-usage-col { flex: 1; min-width: 220px; }
+  .weekly-usage-col h4 { font-size: 0.82rem; color: var(--color-muted); font-weight: 700; margin-bottom: 6px; }
+  .weekly-usage-col table { box-shadow: none; }
+  .weekly-usage-col th, .weekly-usage-col td { padding: 6px 8px; font-size: 0.82rem; }
+  .weekly-usage-empty { font-size: 0.82rem; color: var(--color-muted); padding: 6px 0; }
 </style>
 </head>
 <body>
@@ -148,6 +162,10 @@
         <input type="checkbox" id="toggle-auto-approve">
         🔒 マスター限定：自動承認モード（新規登録を即座に承認する）
       </label>
+    </div>
+    <div id="weekly-usage-section">
+      <h3>週次利用状況（生徒ごとの質問回数・合計Token）</h3>
+      <div id="weekly-usage-cols">読み込み中…</div>
     </div>
     <div class="toolbar">
       <button class="btn secondary" id="btn-select-all">全選択</button>
@@ -276,6 +294,44 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function renderWeeklyUsageColumn(week) {
+  const label = week.isCurrentWeek ? `今週（${week.weekStart}〜、進行中）` : `先週（${week.weekStart}〜）`;
+  if (!week.students || week.students.length === 0) {
+    return `<div class="weekly-usage-col"><h4>${escapeHtml(label)}</h4><div class="weekly-usage-empty">利用者なし</div></div>`;
+  }
+  const rows = week.students.map(s => `
+    <tr>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${s.count}回</td>
+      <td>${s.tokens.toLocaleString()}</td>
+    </tr>`).join('');
+  return `
+    <div class="weekly-usage-col">
+      <h4>${escapeHtml(label)}</h4>
+      <table>
+        <thead><tr><th>生徒名</th><th>質問回数</th><th>合計Token</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+async function loadWeeklyUsage() {
+  const container = document.getElementById('weekly-usage-cols');
+  container.textContent = '読み込み中…';
+  try {
+    const res = await apiRequest('/api/admin/weekly-usage', { method: 'GET' });
+    if (!res.ok) {
+      container.textContent = '週次利用状況の取得に失敗しました。';
+      return;
+    }
+    const data = await res.json();
+    const weeks = data.weeks || [];
+    container.innerHTML = weeks.map(renderWeeklyUsageColumn).join('');
+  } catch (err) {
+    container.textContent = '週次利用状況の取得に失敗しました。';
+  }
+}
+
 async function loadSettings() {
   const res = await apiRequest('/api/admin/settings', { method: 'GET' });
   if (!res.ok) return;
@@ -346,6 +402,7 @@ document.getElementById('btn-login').addEventListener('click', async () => {
   statusMsg.textContent = `${students.length}件`;
   renderTable();
   loadSettings();
+  loadWeeklyUsage();
 });
 
 document.getElementById('toggle-line-notify').addEventListener('change', async (e) => {
@@ -394,7 +451,7 @@ document.getElementById('btn-select-pending').addEventListener('click', () => {
 document.getElementById('btn-bulk-approve').addEventListener('click', () => runAction('approve', getCheckedIds()));
 document.getElementById('btn-bulk-reject').addEventListener('click',  () => runAction('reject',  getCheckedIds()));
 document.getElementById('btn-bulk-delete').addEventListener('click',  () => runAction('delete',  getCheckedIds()));
-document.getElementById('btn-refresh').addEventListener('click', loadStudents);
+document.getElementById('btn-refresh').addEventListener('click', () => { loadStudents(); loadWeeklyUsage(); });
 document.getElementById('btn-logout').addEventListener('click', () => {
   sessionStorage.removeItem('ADMIN_PASSWORD');
   adminPassword = '';
@@ -409,6 +466,7 @@ if (adminPassword) {
   showMain();
   loadStudents();
   loadSettings();
+  loadWeeklyUsage();
 }
 </script>
 </body>
