@@ -359,3 +359,9 @@ APIキーなどの秘密情報は **Vercelの環境変数** に入れる（コ�
 
 ### 2026-08-04 20:32（PWA化、PR #35）
 - `public/manifest.json`（新規）/ `public/icon-192.png`・`icon-512.png`（新規）/ `public/index.html`: ホーム画面に追加したときアプリらしいアイコン・起動画面（standalone表示）になるようPWA対応。ロゴ（`logo.png`、916x1112の縦長画像）をPythonのPillowでブランドカラー(#1B3A5B)背景の正方形にリサイズし、192x192・512x512のアイコンを生成（ImageMagick・sharpは未導入だったためPillowを使用）。iOS用に`apple-touch-icon`・`apple-mobile-web-app-*`メタタグも追加。サービスワーカーは追加していない（チャット機能自体が常時ネット接続前提でオフラインキャッシュの価値が薄く、キャッシュ無効化の複雑さを避けるため）。Playwrightで、manifest.jsonの取得・パース、両アイコン画像の取得、theme-color・apple-touch-iconの設定、コンソールエラーが無いことを確認済み（9件）。
+
+### 2026-08-04 21:08（管理画面に週次利用状況を表示、PR #36）
+- `log.gs`: 週次集計ロジックを`computeWeeklyUsageRows(weekStart)`として切り出し（シートに書き込む既存の`aggregateUsageForWeek()`と、JSONを返すだけの新しいAPIの両方から共通で使えるようにするリファクタ、シートへの書き込み挙動自体は変更なし）。新規`doGet(e)`を追加し、`?action=weeklyUsage&weeks=N&secret=...`で今週（進行中）を含む直近N週分（weeksは1〜8にクランプ）を新しい週から順にJSONで返すAPIとして公開。認証は`doPost`と同じ共有シークレット(`LOG_SHARED_SECRET`)を流用（未設定の間は後方互換で誰でも呼べる）。clasp経由で本番デプロイ済み（v19）、実際にcurlで本番Web AppへリクエストしdoGetが正しく`unauthorized`を返すことを確認済み。
+- `api/admin/weekly-usage.js`（新規）: 管理者パスワード保護（`api/admin/students.js`と同じ`isAdminAuthorized`・5分10回のレート制限パターン）のうえで、上記の`doGet`をサーバー間で中継する新エンドポイント。`LOG_SHARED_SECRET`の値はサーバー側にとどめ、ブラウザ側には一切渡さない設計。
+- `public/admin.html`: 今週（進行中）・先週それぞれについて、生徒ごとの質問回数・合計Tokenを表形式で表示する「週次利用状況」セクションを追加。ログイン時・「再読み込み」ボタン押下時に取得する。これまでGoogle Sheetsを直接開かないと見られなかった週次利用状況が、管理画面から確認できるようになった。
+- log.gsのvmモックでdoGetの認証・データ内容・件数クランプ等を確認（18件）、api/admin/weekly-usage.jsのモックで認証・GAS中継・エラーハンドリングを確認（9件）、Playwrightでadmin.html上の実際の表示を確認（6件）。
