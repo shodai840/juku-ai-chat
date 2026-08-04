@@ -72,11 +72,117 @@
   </div>
 </div>
 
+<!-- 使い方ガイド -->
+<div id="guide-overlay">
+  <div id="guide-modal">
+    <div id="guide-pages">
+
+      <div class="guide-page">
+        <div class="guide-screen guide-screen-welcome">
+          <div class="guide-welcome-icon">📚</div>
+        </div>
+        <h3>ようこそ！</h3>
+        <p>使い方をかんたんに紹介するね</p>
+      </div>
+
+      <div class="guide-page">
+        <div class="guide-screen">
+          <div class="guide-mini-row guide-mini-row-user">
+            <div class="guide-mini-bubble guide-mini-bubble-user">二次方程式の<br>解き方がわからない</div>
+          </div>
+          <div class="guide-mini-row">
+            <div class="guide-mini-avatar">🤖</div>
+            <div class="guide-mini-bubble">いいね、一緒に考えよう！<br>まず何がわかってる？</div>
+          </div>
+          <div class="guide-mini-inputrow">
+            <div class="guide-mini-input">質問を入力…</div>
+            <div class="guide-mini-icon-btn">📷</div>
+            <div class="guide-mini-send-btn">送信</div>
+          </div>
+        </div>
+        <h3>① 質問の仕方</h3>
+        <p>文字で質問したり、📷で<br>ノートや問題の写真を送って質問できるよ</p>
+      </div>
+
+      <div class="guide-page">
+        <div class="guide-screen">
+          <div class="guide-mini-quick-actions">
+            <div class="guide-mini-pill">🍀 やさしく</div>
+            <div class="guide-mini-pill">⏩ 次のステップ</div>
+            <div class="guide-mini-pill">🆕 次の問題</div>
+          </div>
+          <div class="guide-mini-feedback">回答は役に立った？ <span class="guide-mini-fb">👍</span><span class="guide-mini-fb">👎</span></div>
+        </div>
+        <h3>② 各ボタンの説明</h3>
+        <ul class="guide-list">
+          <li><b>🍀 やさしく</b>：もっとかんたんに説明してもらう</li>
+          <li><b>⏩ 次のステップ</b>：もうわかったので先に進む</li>
+          <li><b>🆕 次の問題</b>：別の問題に切りかえる</li>
+          <li><b>👍👎</b>：回答の感想を伝える</li>
+        </ul>
+      </div>
+
+      <div class="guide-page">
+        <div class="guide-screen">
+          <div class="guide-os-mock guide-os-mock-full">
+            <div class="guide-menu-btn">⚙️ 設定</div>
+            <div class="guide-arrow">↓</div>
+            <div class="guide-menu-btn">LINE Labs（または「トーク」）</div>
+            <div class="guide-arrow">↓</div>
+            <div class="guide-menu-item">「リンクを標準ブラウザで開く」を<b>ON</b></div>
+          </div>
+        </div>
+        <h3>③ LINEでの開き方の設定</h3>
+        <p>LINEアプリの設定から「リンクを標準ブラウザで開く」をONにしておくと、リンクがブラウザ（iPhoneはSafari、Androidは設定しているブラウザ）で開くようになるよ。見つからないときは、リンクを長押しして「他のアプリで開く」を選んでね</p>
+      </div>
+
+      <div class="guide-page">
+        <div class="guide-screen guide-screen-split">
+          <div class="guide-os-col">
+            <div class="guide-os-label">iPhone</div>
+            <div class="guide-os-mock">
+              <div class="guide-menu-btn">⬆️</div>
+              <div class="guide-menu-item">ホーム画面に追加</div>
+            </div>
+          </div>
+          <div class="guide-os-col">
+            <div class="guide-os-label">Android</div>
+            <div class="guide-os-mock">
+              <div class="guide-menu-btn">⋮</div>
+              <div class="guide-menu-item">ホーム画面に追加</div>
+            </div>
+          </div>
+        </div>
+        <h3>④ ホーム画面に追加</h3>
+        <p>ブラウザのメニューから「ホーム画面に追加」を選ぶと、アプリみたいにアイコンから開けて次から便利だよ</p>
+      </div>
+
+      <div class="guide-page">
+        <div class="guide-screen guide-screen-welcome">
+          <div class="guide-welcome-icon">💪</div>
+        </div>
+        <h3>準備はOK！</h3>
+        <p>わからないことがあったら、<br>いつでも気軽に聞いてね。<br>勉強、応援してるよ！📣</p>
+      </div>
+
+    </div>
+    <div id="guide-dots"></div>
+    <div id="guide-nav">
+      <button type="button" id="btn-guide-skip">スキップ</button>
+      <div id="guide-nav-right">
+        <button type="button" id="btn-guide-back">戻る</button>
+        <button type="button" id="btn-guide-next">次へ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ヘッダー -->
 <header>
   <h1><img class="brand-logo" src="logo.png" alt="湊 ロゴ"> 進学塾 湊 質問AI</h1>
   <div id="student-info">
     <span id="student-name-disp"></span>
+    <button id="btn-guide" title="使い方">❓</button>
     <button id="btn-rename">学年・クラス変更</button>
     <button id="btn-logout">ログアウト</button>
   </div>
