@@ -22,6 +22,10 @@
       display: flex;
       flex-direction: column;
       height: 100dvh;
+      /* スマホのソフトキーボード表示時、100dvhのままだと高さが縮まらず入力欄が
+         画面外に隠れてしまうブラウザ・アプリ内ブラウザがある。app.jsがvisualViewportの
+         実際の高さを--app-heightに反映するので、対応環境ではそちらを優先する */
+      height: var(--app-height, 100dvh);
       overflow: hidden;
     }
 
@@ -139,6 +143,24 @@
       border-radius: 4px;
       font-weight: 600;
     }
+    /* AIが「はい/いいえ」や番号選択のような簡単な質問をしたときに出るクイック返信ボタン */
+    .quick-replies {
+      margin-top: 10px;
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .btn-quick-reply {
+      background: #fff;
+      color: var(--color-primary);
+      border: 1px solid var(--color-accent);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 0.85rem; font-weight: 700;
+      font-family: var(--font);
+      cursor: pointer;
+    }
+    .btn-quick-reply:hover { background: var(--color-accent-soft); }
+    .btn-quick-reply:disabled { opacity: 0.5; cursor: not-allowed; }
+
     .feedback-row {
       margin-top: 6px;
       display: flex; gap: 6px; align-items: center;

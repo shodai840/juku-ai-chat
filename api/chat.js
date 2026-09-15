@@ -52,6 +52,15 @@ const SYSTEM_PROMPT = `あなたは学習塾の生徒をサポートするAI家�
 - あなた（AI）は間違えることがあります。断定しすぎず、不確かなときは「ここは間違っているかもしれない」と正直に伝える。
 - 生徒が何度説明してもわからなそうなとき、または問題が難しく自信が持てないときは、無理に押し通さず「この部分は塾の先生に直接聞くのが確実だよ」とやさしく促す。
 - 回答の最後に、必要に応じて「※合っているか不安なときや、まだわからないときは先生に質問してね」と一言添える。
+【クイック返信タグ（必ず守る・重要）】
+- 返信の最後の質問が「はい/いいえ」で答えられる質問、または①②③などの番号で選ばせる質問になっているときは、返信の一番最後に改行してから、次の形式で選択肢タグを1行だけ追加する：
+  QUICK_REPLIES: 選択肢1|選択肢2
+  例（「これで合ってる？」と聞いたとき）：QUICK_REPLIES: はい|いいえ
+  例（「次はどれ？①〜 ②〜 ③〜」と聞いたとき）：QUICK_REPLIES: ①|②|③
+- タグの選択肢は、その直前の文章中で使った表記と完全に一致させる（「はい」「いいえ」、「①」「②」など）。
+- このタグは生徒の画面には文章として表示されず、ボタンとして自動的に表示される。タグの存在を文章中で説明したり触れたりしない。
+- 自由な言葉・数値・式で答えてほしい質問（あらかじめ決まった選択肢がない質問）のときは、このタグを絶対につけない。
+- 1回の返信につき、末尾の質問は1つだけなので、タグも1つだけにする。
 【やってはいけないこと】
 - 勉強と無関係な話題（雑談・恋愛相談・不適切な内容など）には応じず、「勉強の質問をしようね」とやさしく戻す。
 - 暴力的・性的・差別的な内容、危険な行為の指南はしない。
@@ -97,6 +106,32 @@ function resolveThinkingLevel(grade, className) {
 // 「大学入試過去問」だけ精度優先のフルモデル、それ以外はコスト優先の軽量モデル。
 function resolveModel(grade, className) {
   return grade === '大学入試過去問' ? 'gemini-3.5-flash' : 'gemini-3.5-flash-lite';
+}
+// ── クイック返信タグの抽出 ──
+// AIの返信末尾に付く「QUICK_REPLIES: 選択肢1|選択肢2」という指示行を取り除き、
+// 生徒に見せる本文（cleanText）と、ボタンとして表示する選択肢（quickReplies）に分ける。
+// タグの行は必ず本文の一番最後（末尾の空行を除いた最後の非空行）にある前提で探す。
+const QUICK_REPLY_MAX_OPTIONS = 6;
+const QUICK_REPLY_MAX_LABEL_LENGTH = 20;
+function extractQuickReplies(text) {
+  const lines = text.split('\n');
+  let quickReplies = [];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line) continue; // 末尾の空行は読み飛ばして探索を続ける
+    const m = line.match(/^QUICK_REPLIES:\s*(.+)$/i);
+    if (m) {
+      const options = m[1]
+        .split('|')
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && s.length <= QUICK_REPLY_MAX_LABEL_LENGTH)
+        .slice(0, QUICK_REPLY_MAX_OPTIONS);
+      if (options.length >= 2) quickReplies = options;
+      lines.splice(i, 1);
+    }
+    break; // タグ行でなくても、末尾の最初の非空行を確認したら探索を終える
+  }
+  return { cleanText: lines.join('\n').trimEnd(), quickReplies };
 }
 // ── 同一生徒の連続リクエスト制限（乱用防止：1分あたり8回まで）──
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -311,6 +346,10 @@ export default async function handler(req, res) {
       error: 'AIとの通信でエラーが起きました。インターネット接続を確認してね。'
     });
   }
+  // クイック返信タグを本文から取り除く（ログ・保存する会話履歴にはタグを残さない）
+  const { cleanText, quickReplies } = extractQuickReplies(reply);
+  reply = cleanText;
+
   // ── 成功時のログ送信：waitUntil()でレスポンスを先に返し、ログはバックグラウンドで送る ──
   waitUntil(sendLog({
     timestamp: jstTimestamp(),
@@ -334,5 +373,5 @@ export default async function handler(req, res) {
       { student_id: student.id, role: 'model', text: reply }
     ]).catch(err => console.error('会話履歴の保存失敗（無視）:', err))
   );
-  return res.status(200).json({ reply });
+  return res.status(200).json({ reply, quickReplies });
 }

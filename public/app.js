@@ -602,7 +602,27 @@ async function sendFeedback(feedback, questionText, aiReply, containerEl) {
   }
 }
 
-function buildAIBubbleNode(text, questionText) {
+// AIが「はい/いいえ」や番号選択のような簡単な質問をしたときに、サーバーが返す
+// quickReplies（選択肢の配列）をボタンとして表示する。押すとその選択肢をそのまま送信する。
+function buildQuickRepliesNode(quickReplies) {
+  const qrRow = document.createElement('div');
+  qrRow.className = 'quick-replies';
+  quickReplies.forEach(option => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-quick-reply';
+    btn.textContent = option;
+    btn.addEventListener('click', () => {
+      if (isSending) return;
+      msgInput.value = option;
+      sendMessage();
+    });
+    qrRow.appendChild(btn);
+  });
+  return qrRow;
+}
+
+function buildAIBubbleNode(text, questionText, quickReplies) {
   const row = document.createElement('div');
   row.className = 'msg-row model';
   const av = document.createElement('div');
@@ -620,6 +640,10 @@ function buildAIBubbleNode(text, questionText) {
   bubble.appendChild(document.createElement('br'));
   bubble.appendChild(footer);
 
+  if (Array.isArray(quickReplies) && quickReplies.length > 0) {
+    bubble.appendChild(buildQuickRepliesNode(quickReplies));
+  }
+
   const feedbackRow = document.createElement('div');
   feedbackRow.className = 'feedback-row';
   const btnGood = document.createElement('button');
@@ -636,8 +660,8 @@ function buildAIBubbleNode(text, questionText) {
   return { row, bubble };
 }
 
-function addAIBubble(text, questionText) {
-  const { row, bubble } = buildAIBubbleNode(text, questionText);
+function addAIBubble(text, questionText, quickReplies) {
+  const { row, bubble } = buildAIBubbleNode(text, questionText, quickReplies);
   document.getElementById('chat-area').appendChild(row);
   renderKaTeX(bubble);
   scrollBottom();
@@ -661,6 +685,28 @@ function scrollBottom() {
   const area = document.getElementById('chat-area');
   area.scrollTop = area.scrollHeight;
 }
+
+// ── スマホのソフトキーボード対策 ──
+// 100dvhはURLバーの表示/非表示には対応するが、ソフトキーボードが開いてもレイアウトの
+// 高さが縮まらないブラウザ・アプリ内ブラウザ（LINEなど）があり、その場合フッター（入力欄）が
+// 画面外に隠れて送信後の返信が見えづらくなる。実際に見えているvisualViewportの高さを
+// --app-heightに反映し（style.css参照）、キーボード表示中も確実に画面内に収める。
+function updateAppHeight() {
+  const vv = window.visualViewport;
+  const h = vv ? vv.height : window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', h + 'px');
+  // iOSはテキスト入力にフォーカスすると、入力欄を見せようとページ全体を縦にスクロール
+  // させることがある。ページ内は#chat-areaだけがスクロールする設計なので、
+  // ページ自体のスクロール位置は常に0に戻しておく
+  window.scrollTo(0, 0);
+  scrollBottom();
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateAppHeight);
+  window.visualViewport.addEventListener('scroll', updateAppHeight);
+}
+window.addEventListener('resize', updateAppHeight);
+updateAppHeight();
 
 // ── 過去の会話履歴の追加読み込み（一番上までスクロールしたら自動で古い分を読み込む）──
 function buildHistoryEntryNode(h, lastUserTextRef) {
@@ -926,6 +972,8 @@ async function sendMessage() {
 
   isSending = true;
   document.getElementById('btn-send').disabled = true;
+  // 新しいメッセージを送るタイミングで、それより前のクイック返信ボタンは古くなるので消す
+  document.querySelectorAll('.quick-replies').forEach(el => el.remove());
 
   const imageDataURL = pendingImageBase64
     ? 'data:' + pendingImageMimeType + ';base64,' + pendingImageBase64
@@ -956,7 +1004,7 @@ async function sendMessage() {
   const handleSuccess = async (res) => {
     const data = await res.json();
     const reply = data.reply || '（回答を取得できませんでした）';
-    addAIBubble(reply, text);
+    addAIBubble(reply, text, data.quickReplies);
     // 画像のみ（テキストなし）の質問も、会話の文脈から欠落しないようプレースホルダーを積む
     history.push({ role: 'user', text: text || '（画像で質問した）' });
     history.push({ role: 'model', text: reply });
