@@ -81,12 +81,13 @@
 
     /* ── チャット表示エリア＋入力フォームのスクロール外枠 ── */
     /* 実際にスクロールするのはこの#chat-scroll。#chat-area（メッセージ）と#input-area
-       （入力フォーム、sticky）を両方内側に入れることで、フォーカスした入力欄をキーボードの
-       上に見せようとするブラウザの標準スクロール動作がこの要素に効き、sticky footerが
-       正しくキーボードの上端に追従する（詳細はmodel_notes.md参照） */
+       （入力フォーム）を両方内側に入れることで、フォーカスした入力欄をキーボードの
+       上に見せようとするブラウザの標準スクロール動作がこの要素に効く（詳細はmodel_notes.md参照）。
+       overscroll-behaviorで、端まで来たときに親（ページ全体）へスクロールが伝播しないようにする */
     #chat-scroll {
       flex: 1;
       overflow-y: auto;
+      overscroll-behavior-y: contain;
       display: flex;
       flex-direction: column;
     }
@@ -102,6 +103,12 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+    }
+    /* ソフトキーボード表示中は#input-areaがposition:absoluteで通常のレイアウトから
+       抜けるため（下のコメント参照）、その高さぶんの余白をここで確保し、最新メッセージが
+       フッターの裏に隠れないようにする */
+    #chat-scroll.keyboard-open #chat-area {
+      padding-bottom: calc(16px + var(--footer-h, 0px));
     }
 
     .msg-row {
@@ -207,12 +214,7 @@
     }
 
     /* ── 入力フォーム ── */
-    /* position:stickyで#chat-scroll（親、スクロール可能）の下端に固定する。
-       position:fixedで画面に固定する方式（旧実装）は、iOS Safariでソフトキーボードが
-       開いたときのリサイズのタイミングが不安定で、入力欄が画面の途中に浮いたり、
-       逆にキーボードの下に隠れたりして安定しなかった。sticky＋スクロール可能な親要素の
-       組み合わせなら、フォーカスした入力欄をキーボードの上に見せようとするブラウザの
-       標準スクロール動作にそのまま乗る形になるため、より確実にキーボードの上端に追従する */
+    /* 通常はposition:stickyで#chat-scroll（親、スクロール可能）の下端に固定する。 */
     #input-area {
       position: sticky;
       bottom: 0;
@@ -220,6 +222,18 @@
       border-top: 1px solid #D6E4F0;
       padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
       z-index: 10;
+    }
+    /* iOS Safari（iOS 26で確認されている既知の不具合。Appleの開発者フォーラムでも報告あり）は、
+       ソフトキーボード表示中にposition:fixed/stickyの要素が正しく追従せず、画面の途中に
+       浮いたり本来の位置からズレたりすることがある。app.jsがvisualViewportでキーボードの
+       開閉を検知し、開いている間だけこのクラスを付けて、position:absoluteでキーボードの
+       上端の座標を直接指定する回避策に切り替える（#chat-scrollにposition指定が無いため、
+       #chat-scrollの外＝ビューポート基準で配置される＝キーボードの動きに直接追従できる）*/
+    #chat-scroll.keyboard-open #input-area {
+      position: absolute;
+      left: 0; right: 0;
+      bottom: auto;
+      top: var(--kb-footer-top, auto);
     }
     #image-preview-wrap {
       display: none;
