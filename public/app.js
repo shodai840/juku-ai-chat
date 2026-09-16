@@ -683,79 +683,10 @@ function addErrorBubble(msg) {
   scrollBottom();
 }
 
-// 実際にスクロールするのは#chat-area自身ではなく、それを囲む#chat-scroll
-// （#input-areaもここに入っており、position:stickyで下端に固定している。詳細はstyle.css参照）
 function scrollBottom() {
-  const scrollEl = document.getElementById('chat-scroll');
-  scrollEl.scrollTop = scrollEl.scrollHeight;
+  const area = document.getElementById('chat-area');
+  area.scrollTop = area.scrollHeight;
 }
-
-// ── スマホのソフトキーボード対策 ──
-// 通常はposition:sticky（#chat-scroll側のスクロール動作に乗せる形）で入力欄を
-// 画面下端に追従させているが、iOS Safari（iOS 26で確認されている既知の不具合。
-// https://developer.apple.com/forums/thread/800125 ）は、ソフトキーボード表示中に
-// position:fixed/stickyの要素が正しく追従せず、画面の途中に浮いたりズレたりすることがある。
-// そのため、キーボードが開いている間だけ#input-areaをposition:absoluteに切り替えて、
-// キーボードの上端の座標を直接計算して指定する（style.cssの#chat-scroll.keyboard-open参照）。
-//
-// 開閉の判定は、visualViewportのサイズ変化を監視して後から追いつく方式（旧実装）ではなく、
-// 入力欄（msg-input）自体のfocus/blurイベントを使う。サイズ変化を待ってから反応すると、
-// Safari自身が先におかしな位置へ動かした後を追いかける形になりレースコンディションで
-// 負けることがあったため、「入力欄をタップした瞬間」に即座に切り替えることで、
-// Safari側のキーボード表示アニメーションが始まる前に先回りする。
-// 実際の座標（--kb-footer-top）は、キーボードのアニメーション中も含めて
-// visualViewportのresize/scrollイベントで随時更新し続ける。
-const chatScrollEl = document.getElementById('chat-scroll');
-const inputAreaEl = document.getElementById('input-area');
-
-// #input-areaは中の要素（クイックアクション・画像プレビュー・クイック返信ボタンなど）に
-// よって高さが変わるため、実際の高さを常に--footer-hへ反映する
-// （キーボード表示中、#input-areaがposition:absoluteで通常のレイアウトから抜けたぶんの
-// 余白を#chat-areaに持たせるために使う。style.css参照）
-function updateFooterHeight() {
-  document.documentElement.style.setProperty('--footer-h', inputAreaEl.offsetHeight + 'px');
-}
-if (window.ResizeObserver) {
-  new ResizeObserver(updateFooterHeight).observe(inputAreaEl);
-} else {
-  updateFooterHeight();
-}
-
-function isKeyboardModeActive() {
-  return chatScrollEl.classList.contains('keyboard-open');
-}
-
-function updateKeyboardFooterPosition() {
-  const vv = window.visualViewport;
-  if (!vv) return;
-  const top = vv.offsetTop + vv.height - inputAreaEl.offsetHeight;
-  document.documentElement.style.setProperty('--kb-footer-top', top + 'px');
-  scrollBottom();
-}
-
-// msgInput変数はこのコードより後（自動リサイズの箇所）で定義されるため、
-// ここでは直接document.getElementByIdで取得する
-document.getElementById('msg-input').addEventListener('focus', () => {
-  chatScrollEl.classList.add('keyboard-open');
-  updateKeyboardFooterPosition();
-});
-document.getElementById('msg-input').addEventListener('blur', () => {
-  chatScrollEl.classList.remove('keyboard-open');
-  scrollBottom();
-});
-
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', () => {
-    if (isKeyboardModeActive()) updateKeyboardFooterPosition();
-    else scrollBottom();
-  });
-  window.visualViewport.addEventListener('scroll', () => {
-    if (isKeyboardModeActive()) updateKeyboardFooterPosition();
-  });
-}
-window.addEventListener('resize', () => {
-  if (!isKeyboardModeActive()) scrollBottom();
-});
 
 // ── 過去の会話履歴の追加読み込み（一番上までスクロールしたら自動で古い分を読み込む）──
 function buildHistoryEntryNode(h, lastUserTextRef) {
@@ -774,17 +705,14 @@ function buildHistoryEntryNode(h, lastUserTextRef) {
 
 async function loadOlderHistoryIfNeeded() {
   if (isLoadingOlderHistory || !hasMoreServerHistory || !oldestLoadedAt) return;
-  // スクロール位置の判定・補正は実際にスクロールする#chat-scroll側で、
-  // メッセージの挿入位置は中身の#chat-area側で行う
-  const scrollEl = document.getElementById('chat-scroll');
-  const contentEl = document.getElementById('chat-area');
-  if (scrollEl.scrollTop > 40) return; // 一番上付近まで来ていなければ何もしない
+  const area = document.getElementById('chat-area');
+  if (area.scrollTop > 40) return; // 一番上付近まで来ていなければ何もしない
 
   isLoadingOlderHistory = true;
   const loadingEl = document.createElement('div');
   loadingEl.style.cssText = 'text-align:center;font-size:0.78rem;color:var(--color-muted);padding:6px 0;';
   loadingEl.textContent = '過去の会話を読み込み中…';
-  contentEl.insertBefore(loadingEl, contentEl.firstChild);
+  area.insertBefore(loadingEl, area.firstChild);
 
   try {
     const res = await fetch(`/api/history?limit=50&before=${encodeURIComponent(oldestLoadedAt)}`, {
@@ -805,10 +733,10 @@ async function loadOlderHistoryIfNeeded() {
         if (node) fragment.appendChild(node);
       });
 
-      const prevScrollHeight = scrollEl.scrollHeight;
-      contentEl.insertBefore(fragment, loadingEl);
+      const prevScrollHeight = area.scrollHeight;
+      area.insertBefore(fragment, loadingEl);
       // 先頭に追加した分だけ見た目の位置がずれないよう、増えた高さ分スクロール位置を補正する
-      scrollEl.scrollTop += scrollEl.scrollHeight - prevScrollHeight;
+      area.scrollTop += area.scrollHeight - prevScrollHeight;
 
       history = [...olderMessages.map(m => ({ role: m.role, text: m.text })), ...history];
       saveHistory();
@@ -821,7 +749,7 @@ async function loadOlderHistoryIfNeeded() {
   }
 }
 
-document.getElementById('chat-scroll').addEventListener('scroll', () => {
+document.getElementById('chat-area').addEventListener('scroll', () => {
   loadOlderHistoryIfNeeded();
 });
 
@@ -1104,7 +1032,14 @@ async function sendMessage() {
 
   isSending = false;
   setInputsDisabled(false);
-  msgInput.focus();
+  // 送信完了のたびに入力欄へ自動で再フォーカスしていたが、iPhone Safariでは
+  // フォーカスのたびに「入力欄を見せる」自動スクロールが働き、新しいメッセージが
+  // 増えて画面が変わった後もその位置のまま止まってしまう不具合の原因になっていた。
+  // 一度blur()でキーボードを閉じてSafariの自動スクロールを落ち着かせてから、
+  // 改めてチャット最下部までスクロールし直す（再フォーカスはせず、続きを入力したい
+  // ときはもう一度入力欄をタップしてもらう）
+  msgInput.blur();
+  setTimeout(scrollBottom, 100);
 }
 
 document.getElementById('btn-send').addEventListener('click', sendMessage);
