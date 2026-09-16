@@ -622,7 +622,7 @@ function buildQuickRepliesNode(quickReplies) {
   return qrRow;
 }
 
-function buildAIBubbleNode(text, questionText, quickReplies) {
+function buildAIBubbleNode(text, questionText) {
   const row = document.createElement('div');
   row.className = 'msg-row model';
   const av = document.createElement('div');
@@ -639,10 +639,6 @@ function buildAIBubbleNode(text, questionText, quickReplies) {
   footer.textContent = '※合っているか不安なときや、まだわからないときは先生に質問してね';
   bubble.appendChild(document.createElement('br'));
   bubble.appendChild(footer);
-
-  if (Array.isArray(quickReplies) && quickReplies.length > 0) {
-    bubble.appendChild(buildQuickRepliesNode(quickReplies));
-  }
 
   const feedbackRow = document.createElement('div');
   feedbackRow.className = 'feedback-row';
@@ -661,8 +657,14 @@ function buildAIBubbleNode(text, questionText, quickReplies) {
 }
 
 function addAIBubble(text, questionText, quickReplies) {
-  const { row, bubble } = buildAIBubbleNode(text, questionText, quickReplies);
-  document.getElementById('chat-area').appendChild(row);
+  const { row, bubble } = buildAIBubbleNode(text, questionText);
+  const chatArea = document.getElementById('chat-area');
+  chatArea.appendChild(row);
+  // クイック返信ボタンは、吹き出しの中ではなく下に独立した行として出す
+  // （ボタンで選ぶものだと一目でわかるように、AIの発言そのものとは見た目を分ける）
+  if (Array.isArray(quickReplies) && quickReplies.length > 0) {
+    chatArea.appendChild(buildQuickRepliesNode(quickReplies));
+  }
   renderKaTeX(bubble);
   scrollBottom();
 }
@@ -687,14 +689,15 @@ function scrollBottom() {
 }
 
 // ── スマホのソフトキーボード対策 ──
-// 100dvhはURLバーの表示/非表示には対応するが、ソフトキーボードが開いてもレイアウトの
-// 高さが縮まらないブラウザ・アプリ内ブラウザ（LINEなど）があり、その場合フッター（入力欄）が
-// 画面外に隠れて送信後の返信が見えづらくなる。実際に見えているvisualViewportの高さを
-// --app-heightに反映し（style.css参照）、キーボード表示中も確実に画面内に収める。
-function updateAppHeight() {
+// #input-area（入力欄）はposition:fixedで画面下端に固定している（style.css参照）。
+// body全体の高さをキーボードに合わせて縮める方式は、iOS Safariではリサイズの
+// タイミングが不安定で、入力欄が画面の途中に浮いたまま止まってしまうことがあったため、
+// 代わりにソフトキーボードの高さ（visualViewportが縮んだ分）を--keyboard-gapとして
+// 直接計算し、#input-areaのbottom位置をキーボードの上端に合わせる。
+function updateKeyboardGap() {
   const vv = window.visualViewport;
-  const h = vv ? vv.height : window.innerHeight;
-  document.documentElement.style.setProperty('--app-height', h + 'px');
+  const gap = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  document.documentElement.style.setProperty('--keyboard-gap', gap + 'px');
   // iOSはテキスト入力にフォーカスすると、入力欄を見せようとページ全体を縦にスクロール
   // させることがある。ページ内は#chat-areaだけがスクロールする設計なので、
   // ページ自体のスクロール位置は常に0に戻しておく
@@ -702,11 +705,24 @@ function updateAppHeight() {
   scrollBottom();
 }
 if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', updateAppHeight);
-  window.visualViewport.addEventListener('scroll', updateAppHeight);
+  window.visualViewport.addEventListener('resize', updateKeyboardGap);
+  window.visualViewport.addEventListener('scroll', updateKeyboardGap);
 }
-window.addEventListener('resize', updateAppHeight);
-updateAppHeight();
+window.addEventListener('resize', updateKeyboardGap);
+updateKeyboardGap();
+
+// #input-areaは中の要素（クイックアクション・画像プレビュー・クイック返信ボタンなど）に
+// よって高さが変わるため、実際の高さを常に--footer-hへ反映し、#chat-areaの下側の余白
+// （最新メッセージがフッターの裏に隠れないための余白）を追従させる
+const inputAreaEl = document.getElementById('input-area');
+function updateFooterHeight() {
+  document.documentElement.style.setProperty('--footer-h', inputAreaEl.offsetHeight + 'px');
+}
+if (window.ResizeObserver) {
+  new ResizeObserver(updateFooterHeight).observe(inputAreaEl);
+} else {
+  updateFooterHeight();
+}
 
 // ── 過去の会話履歴の追加読み込み（一番上までスクロールしたら自動で古い分を読み込む）──
 function buildHistoryEntryNode(h, lastUserTextRef) {
