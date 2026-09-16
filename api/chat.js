@@ -62,6 +62,7 @@ const SYSTEM_PROMPT = `あなたは学習塾の生徒をサポートするAI家�
 - このタグは生徒の画面には文章として表示されず、ボタンとして自動的に表示される。タグの存在を文章中で説明したり触れたりしない。
 - 自由な言葉・数値・式で答えてほしい質問（あらかじめ決まった選択肢がない質問）のときは、このタグを絶対につけない。
 - 1回の返信につき、末尾の質問は1つだけなので、タグも1つだけにする。
+- このタグの前には、必ず生徒への返答となる文章（説明・ヒント・質問など）を書く。タグだけを返信することは絶対にしない。
 【やってはいけないこと】
 - 勉強と無関係な話題（雑談・恋愛相談・不適切な内容など）には応じず、「勉強の質問をしようね」とやさしく戻す。
 - 暴力的・性的・差別的な内容、危険な行為の指南はしない。
@@ -117,6 +118,7 @@ const QUICK_REPLY_MAX_LABEL_LENGTH = 20;
 function extractQuickReplies(text) {
   const lines = text.split('\n');
   let quickReplies = [];
+  let tagLineIndex = -1;
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
     if (!line) continue; // 末尾の空行は読み飛ばして探索を続ける
@@ -127,12 +129,17 @@ function extractQuickReplies(text) {
         .map(s => s.trim())
         .filter(s => s.length > 0 && s.length <= QUICK_REPLY_MAX_LABEL_LENGTH)
         .slice(0, QUICK_REPLY_MAX_OPTIONS);
-      if (options.length >= 2) quickReplies = options;
-      lines.splice(i, 1);
+      if (options.length >= 2) { quickReplies = options; tagLineIndex = i; }
     }
     break; // タグ行でなくても、末尾の最初の非空行を確認したら探索を終える
   }
-  return { cleanText: lines.join('\n').trimEnd(), quickReplies };
+  if (tagLineIndex === -1) return { cleanText: text.trim(), quickReplies: [] };
+  const withoutTag = [...lines.slice(0, tagLineIndex), ...lines.slice(tagLineIndex + 1)].join('\n').trimEnd();
+  // まれにAIがタグだけを返して説明文が無いことがある。その場合タグを取り除くと本文が
+  // 空になり、生徒に「回答を取得できませんでした」と誤って表示されてしまうため、
+  // 本文が空になるときはタグを取り除かず、元のテキストをそのまま返す
+  if (!withoutTag) return { cleanText: text.trim(), quickReplies: [] };
+  return { cleanText: withoutTag, quickReplies };
 }
 // ── 同一生徒の連続リクエスト制限（乱用防止：1分あたり8回まで）──
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
