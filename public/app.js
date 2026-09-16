@@ -683,46 +683,24 @@ function addErrorBubble(msg) {
   scrollBottom();
 }
 
+// 実際にスクロールするのは#chat-area自身ではなく、それを囲む#chat-scroll
+// （#input-areaもここに入っており、position:stickyで下端に固定している。詳細はstyle.css参照）
 function scrollBottom() {
-  const area = document.getElementById('chat-area');
-  area.scrollTop = area.scrollHeight;
+  const scrollEl = document.getElementById('chat-scroll');
+  scrollEl.scrollTop = scrollEl.scrollHeight;
 }
 
 // ── スマホのソフトキーボード対策 ──
-// #input-area（入力欄）はposition:fixedで画面下端に固定している（style.css参照）。
-// body全体の高さをキーボードに合わせて縮める方式は、iOS Safariではリサイズの
-// タイミングが不安定で、入力欄が画面の途中に浮いたまま止まってしまうことがあったため、
-// 代わりにソフトキーボードの高さ（visualViewportが縮んだ分）を--keyboard-gapとして
-// 直接計算し、#input-areaのbottom位置をキーボードの上端に合わせる。
-function updateKeyboardGap() {
-  const vv = window.visualViewport;
-  const gap = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
-  document.documentElement.style.setProperty('--keyboard-gap', gap + 'px');
-  // iOSはテキスト入力にフォーカスすると、入力欄を見せようとページ全体を縦にスクロール
-  // させることがある。ページ内は#chat-areaだけがスクロールする設計なので、
-  // ページ自体のスクロール位置は常に0に戻しておく
-  window.scrollTo(0, 0);
-  scrollBottom();
-}
+// フォーカスした入力欄をキーボードの上に見せようとするブラウザの標準スクロール動作が
+// #chat-scrollに効き、sticky固定の#input-areaが自然にキーボードの上端に追従する
+// （position:fixedで自前にキーボードの高さを計算する旧実装は、iOS Safariでリサイズの
+// タイミングが不安定で入力欄が画面の途中で止まることがあったため、この方式に変更した）。
+// ここでは、ビューポートのサイズが変わるたび（キーボードの開閉・画面回転など）に
+// 念のため最新メッセージが見える位置までスクロールし直すだけにしている。
 if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', updateKeyboardGap);
-  window.visualViewport.addEventListener('scroll', updateKeyboardGap);
+  window.visualViewport.addEventListener('resize', scrollBottom);
 }
-window.addEventListener('resize', updateKeyboardGap);
-updateKeyboardGap();
-
-// #input-areaは中の要素（クイックアクション・画像プレビュー・クイック返信ボタンなど）に
-// よって高さが変わるため、実際の高さを常に--footer-hへ反映し、#chat-areaの下側の余白
-// （最新メッセージがフッターの裏に隠れないための余白）を追従させる
-const inputAreaEl = document.getElementById('input-area');
-function updateFooterHeight() {
-  document.documentElement.style.setProperty('--footer-h', inputAreaEl.offsetHeight + 'px');
-}
-if (window.ResizeObserver) {
-  new ResizeObserver(updateFooterHeight).observe(inputAreaEl);
-} else {
-  updateFooterHeight();
-}
+window.addEventListener('resize', scrollBottom);
 
 // ── 過去の会話履歴の追加読み込み（一番上までスクロールしたら自動で古い分を読み込む）──
 function buildHistoryEntryNode(h, lastUserTextRef) {
@@ -741,14 +719,17 @@ function buildHistoryEntryNode(h, lastUserTextRef) {
 
 async function loadOlderHistoryIfNeeded() {
   if (isLoadingOlderHistory || !hasMoreServerHistory || !oldestLoadedAt) return;
-  const area = document.getElementById('chat-area');
-  if (area.scrollTop > 40) return; // 一番上付近まで来ていなければ何もしない
+  // スクロール位置の判定・補正は実際にスクロールする#chat-scroll側で、
+  // メッセージの挿入位置は中身の#chat-area側で行う
+  const scrollEl = document.getElementById('chat-scroll');
+  const contentEl = document.getElementById('chat-area');
+  if (scrollEl.scrollTop > 40) return; // 一番上付近まで来ていなければ何もしない
 
   isLoadingOlderHistory = true;
   const loadingEl = document.createElement('div');
   loadingEl.style.cssText = 'text-align:center;font-size:0.78rem;color:var(--color-muted);padding:6px 0;';
   loadingEl.textContent = '過去の会話を読み込み中…';
-  area.insertBefore(loadingEl, area.firstChild);
+  contentEl.insertBefore(loadingEl, contentEl.firstChild);
 
   try {
     const res = await fetch(`/api/history?limit=50&before=${encodeURIComponent(oldestLoadedAt)}`, {
@@ -769,10 +750,10 @@ async function loadOlderHistoryIfNeeded() {
         if (node) fragment.appendChild(node);
       });
 
-      const prevScrollHeight = area.scrollHeight;
-      area.insertBefore(fragment, loadingEl);
+      const prevScrollHeight = scrollEl.scrollHeight;
+      contentEl.insertBefore(fragment, loadingEl);
       // 先頭に追加した分だけ見た目の位置がずれないよう、増えた高さ分スクロール位置を補正する
-      area.scrollTop += area.scrollHeight - prevScrollHeight;
+      scrollEl.scrollTop += scrollEl.scrollHeight - prevScrollHeight;
 
       history = [...olderMessages.map(m => ({ role: m.role, text: m.text })), ...history];
       saveHistory();
@@ -785,7 +766,7 @@ async function loadOlderHistoryIfNeeded() {
   }
 }
 
-document.getElementById('chat-area').addEventListener('scroll', () => {
+document.getElementById('chat-scroll').addEventListener('scroll', () => {
   loadOlderHistoryIfNeeded();
 });
 
