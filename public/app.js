@@ -955,6 +955,13 @@ async function sendMessage() {
   // 新しいメッセージを送るタイミングで、それより前のクイック返信ボタンは古くなるので消す
   document.querySelectorAll('.quick-replies').forEach(el => el.remove());
 
+  // 送信を確定した直後（AIの応答を待つ前）にすぐblurしてキーボードを閉じる。
+  // 応答が返ってくるまでの間もフォーカスを残したままにすると、その間に追加される
+  // ローディング表示やAIの返信のたびにiPhone Safariが「入力欄を見せる」自動スクロールを
+  // 繰り返し発生させ、こちらのscrollBottom()と競合して位置がおかしくなることがあったため、
+  // 早い段階でフォーカスを外し、以降はSafariの自動スクロールが働かない状態で進める
+  msgInput.blur();
+
   const imageDataURL = pendingImageBase64
     ? 'data:' + pendingImageMimeType + ';base64,' + pendingImageBase64
     : null;
@@ -1032,13 +1039,9 @@ async function sendMessage() {
 
   isSending = false;
   setInputsDisabled(false);
-  // 送信完了のたびに入力欄へ自動で再フォーカスしていたが、iPhone Safariでは
-  // フォーカスのたびに「入力欄を見せる」自動スクロールが働き、新しいメッセージが
-  // 増えて画面が変わった後もその位置のまま止まってしまう不具合の原因になっていた。
-  // 一度blur()でキーボードを閉じてSafariの自動スクロールを落ち着かせてから、
-  // 改めてチャット最下部までスクロールし直す（再フォーカスはせず、続きを入力したい
-  // ときはもう一度入力欄をタップしてもらう）
-  msgInput.blur();
+  // blur()は送信直後（応答を待つ前）に済ませてあるので、ここでは念のため
+  // 最終的な位置を最下部に合わせ直すだけにする（再フォーカスはせず、続きを
+  // 入力したいときはもう一度入力欄をタップしてもらう）
   setTimeout(scrollBottom, 100);
 }
 
