@@ -691,16 +691,54 @@ function scrollBottom() {
 }
 
 // ── スマホのソフトキーボード対策 ──
-// フォーカスした入力欄をキーボードの上に見せようとするブラウザの標準スクロール動作が
-// #chat-scrollに効き、sticky固定の#input-areaが自然にキーボードの上端に追従する
-// （position:fixedで自前にキーボードの高さを計算する旧実装は、iOS Safariでリサイズの
-// タイミングが不安定で入力欄が画面の途中で止まることがあったため、この方式に変更した）。
-// ここでは、ビューポートのサイズが変わるたび（キーボードの開閉・画面回転など）に
-// 念のため最新メッセージが見える位置までスクロールし直すだけにしている。
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', scrollBottom);
+// 通常はposition:sticky（#chat-scroll側のスクロール動作に乗せる形）で入力欄を
+// 画面下端に追従させているが、iOS Safari（iOS 26で確認されている既知の不具合。
+// https://developer.apple.com/forums/thread/800125 ）は、ソフトキーボード表示中に
+// position:fixed/stickyの要素が正しく追従せず、画面の途中に浮いたりズレたりすることがある。
+// そのため、visualViewportでキーボードの開閉を検知し、開いている間だけ#input-areaを
+// position:absoluteに切り替えて、キーボードの上端の座標を直接計算して指定する
+// （style.cssの#chat-scroll.keyboard-open参照）。
+const chatScrollEl = document.getElementById('chat-scroll');
+const inputAreaEl = document.getElementById('input-area');
+
+// #input-areaは中の要素（クイックアクション・画像プレビュー・クイック返信ボタンなど）に
+// よって高さが変わるため、実際の高さを常に--footer-hへ反映する
+// （キーボード表示中、#input-areaがposition:absoluteで通常のレイアウトから抜けたぶんの
+// 余白を#chat-areaに持たせるために使う。style.css参照）
+function updateFooterHeight() {
+  document.documentElement.style.setProperty('--footer-h', inputAreaEl.offsetHeight + 'px');
 }
-window.addEventListener('resize', scrollBottom);
+if (window.ResizeObserver) {
+  new ResizeObserver(updateFooterHeight).observe(inputAreaEl);
+} else {
+  updateFooterHeight();
+}
+
+let kbBaselineHeight = window.innerHeight;
+const KEYBOARD_SHRINK_THRESHOLD = 150; // これ以上visualViewportが縮んだらキーボードが開いたとみなす
+
+function updateKeyboardState() {
+  const vv = window.visualViewport;
+  if (!vv) { scrollBottom(); return; }
+  const keyboardOpen = (kbBaselineHeight - vv.height) > KEYBOARD_SHRINK_THRESHOLD;
+  if (!keyboardOpen) {
+    // キーボードが開いていないときだけ基準値を更新する
+    // （アドレスバーの展開/折りたたみや画面回転にも追従させるため）
+    kbBaselineHeight = window.innerHeight;
+  }
+  chatScrollEl.classList.toggle('keyboard-open', keyboardOpen);
+  if (keyboardOpen) {
+    const top = vv.offsetTop + vv.height - inputAreaEl.offsetHeight;
+    document.documentElement.style.setProperty('--kb-footer-top', top + 'px');
+  }
+  scrollBottom();
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateKeyboardState);
+  window.visualViewport.addEventListener('scroll', updateKeyboardState);
+}
+window.addEventListener('resize', updateKeyboardState);
+updateKeyboardState();
 
 // ── 過去の会話履歴の追加読み込み（一番上までスクロールしたら自動で古い分を読み込む）──
 function buildHistoryEntryNode(h, lastUserTextRef) {
