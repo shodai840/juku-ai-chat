@@ -695,9 +695,16 @@ function scrollBottom() {
 // 画面下端に追従させているが、iOS Safari（iOS 26で確認されている既知の不具合。
 // https://developer.apple.com/forums/thread/800125 ）は、ソフトキーボード表示中に
 // position:fixed/stickyの要素が正しく追従せず、画面の途中に浮いたりズレたりすることがある。
-// そのため、visualViewportでキーボードの開閉を検知し、開いている間だけ#input-areaを
-// position:absoluteに切り替えて、キーボードの上端の座標を直接計算して指定する
-// （style.cssの#chat-scroll.keyboard-open参照）。
+// そのため、キーボードが開いている間だけ#input-areaをposition:absoluteに切り替えて、
+// キーボードの上端の座標を直接計算して指定する（style.cssの#chat-scroll.keyboard-open参照）。
+//
+// 開閉の判定は、visualViewportのサイズ変化を監視して後から追いつく方式（旧実装）ではなく、
+// 入力欄（msg-input）自体のfocus/blurイベントを使う。サイズ変化を待ってから反応すると、
+// Safari自身が先におかしな位置へ動かした後を追いかける形になりレースコンディションで
+// 負けることがあったため、「入力欄をタップした瞬間」に即座に切り替えることで、
+// Safari側のキーボード表示アニメーションが始まる前に先回りする。
+// 実際の座標（--kb-footer-top）は、キーボードのアニメーション中も含めて
+// visualViewportのresize/scrollイベントで随時更新し続ける。
 const chatScrollEl = document.getElementById('chat-scroll');
 const inputAreaEl = document.getElementById('input-area');
 
@@ -714,31 +721,41 @@ if (window.ResizeObserver) {
   updateFooterHeight();
 }
 
-let kbBaselineHeight = window.innerHeight;
-const KEYBOARD_SHRINK_THRESHOLD = 150; // これ以上visualViewportが縮んだらキーボードが開いたとみなす
+function isKeyboardModeActive() {
+  return chatScrollEl.classList.contains('keyboard-open');
+}
 
-function updateKeyboardState() {
+function updateKeyboardFooterPosition() {
   const vv = window.visualViewport;
-  if (!vv) { scrollBottom(); return; }
-  const keyboardOpen = (kbBaselineHeight - vv.height) > KEYBOARD_SHRINK_THRESHOLD;
-  if (!keyboardOpen) {
-    // キーボードが開いていないときだけ基準値を更新する
-    // （アドレスバーの展開/折りたたみや画面回転にも追従させるため）
-    kbBaselineHeight = window.innerHeight;
-  }
-  chatScrollEl.classList.toggle('keyboard-open', keyboardOpen);
-  if (keyboardOpen) {
-    const top = vv.offsetTop + vv.height - inputAreaEl.offsetHeight;
-    document.documentElement.style.setProperty('--kb-footer-top', top + 'px');
-  }
+  if (!vv) return;
+  const top = vv.offsetTop + vv.height - inputAreaEl.offsetHeight;
+  document.documentElement.style.setProperty('--kb-footer-top', top + 'px');
   scrollBottom();
 }
+
+// msgInput変数はこのコードより後（自動リサイズの箇所）で定義されるため、
+// ここでは直接document.getElementByIdで取得する
+document.getElementById('msg-input').addEventListener('focus', () => {
+  chatScrollEl.classList.add('keyboard-open');
+  updateKeyboardFooterPosition();
+});
+document.getElementById('msg-input').addEventListener('blur', () => {
+  chatScrollEl.classList.remove('keyboard-open');
+  scrollBottom();
+});
+
 if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', updateKeyboardState);
-  window.visualViewport.addEventListener('scroll', updateKeyboardState);
+  window.visualViewport.addEventListener('resize', () => {
+    if (isKeyboardModeActive()) updateKeyboardFooterPosition();
+    else scrollBottom();
+  });
+  window.visualViewport.addEventListener('scroll', () => {
+    if (isKeyboardModeActive()) updateKeyboardFooterPosition();
+  });
 }
-window.addEventListener('resize', updateKeyboardState);
-updateKeyboardState();
+window.addEventListener('resize', () => {
+  if (!isKeyboardModeActive()) scrollBottom();
+});
 
 // ── 過去の会話履歴の追加読み込み（一番上までスクロールしたら自動で古い分を読み込む）──
 function buildHistoryEntryNode(h, lastUserTextRef) {
