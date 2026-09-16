@@ -24,7 +24,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
     onload="initKaTeX()"></script>
 
-  <link rel="stylesheet" href="style.css?v=20260916d">
+  <link rel="stylesheet" href="style.css?v=20260916e">
 </head>
 <body>
 
@@ -201,36 +201,28 @@
   ⚠️ AIは間違えることもあります。わからないところは先生に質問してね！
 </div>
 
-<!-- チャット表示エリア＋入力フォームをまとめてスクロールさせる外枠。
-     入力フォーム（#input-area）はこの中でposition:stickyにして下端に固定する。
-     スマホのソフトキーボードが開いたとき、position:fixedだと画面の途中に浮いたり
-     隠れたりして安定しなかったため、この方式に変更した（詳細はmodel_notes.md参照）。
-     フォーカスした入力欄をキーボードの上に見せようとするブラウザの標準動作が、
-     この#chat-scroll自体をスクロールさせてくれるので、sticky footerが正しく
-     キーボードの上端に追従する -->
-<div id="chat-scroll">
-  <div id="chat-area"></div>
+<!-- チャット表示エリア -->
+<div id="chat-area"></div>
 
-  <!-- 入力フォーム -->
-  <div id="input-area">
-    <div id="image-preview-wrap">
-      <img id="image-preview-thumb" src="" alt="選択中の画像">
-      <button id="btn-remove-img" title="画像を外す">✕</button>
-    </div>
-    <div id="quick-actions">
-      <button id="btn-easier" type="button">🍀 やさしく</button>
-      <button id="btn-skip" type="button">⏩ 次のステップ</button>
-      <button id="btn-new-problem" type="button">🆕 次の問題</button>
-    </div>
-    <div id="input-row">
-      <textarea id="msg-input" rows="1" maxlength="2000" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
-      <button id="btn-image" title="画像を添付">📷</button>
-      <button id="btn-send">送信</button>
-    </div>
-    <input id="file-input" type="file" accept="image/*">
+<!-- 入力フォーム -->
+<div id="input-area">
+  <div id="image-preview-wrap">
+    <img id="image-preview-thumb" src="" alt="選択中の画像">
+    <button id="btn-remove-img" title="画像を外す">✕</button>
   </div>
+  <div id="quick-actions">
+    <button id="btn-easier" type="button">🍀 やさしく</button>
+    <button id="btn-skip" type="button">⏩ 次のステップ</button>
+    <button id="btn-new-problem" type="button">🆕 次の問題</button>
+  </div>
+  <div id="input-row">
+    <textarea id="msg-input" rows="1" maxlength="2000" placeholder="質問を入力…（Shift+Enterで改行）"></textarea>
+    <button id="btn-image" title="画像を添付">📷</button>
+    <button id="btn-send">送信</button>
+  </div>
+  <input id="file-input" type="file" accept="image/*">
 </div>
 
-<script src="app.js?v=20260916d"></script>
+<script src="app.js?v=20260916e"></script>
 </body>
 </html>
