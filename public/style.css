@@ -243,7 +243,11 @@
       border: 1px solid #C5D9E8;
       border-radius: var(--radius);
       padding: 10px 12px;
-      font-size: 0.93rem;
+      /* iOS Safariは16px未満の入力欄をタップすると自動でズームインし、
+         フォーカスを外してもズームが微妙に戻りきらないことがあるため、
+         ズームが発生しない16px以上にする（他の文字サイズはrem基準だが、
+         ズーム防止の閾値はデバイスのCSSピクセル基準なのでpx指定にする） */
+      font-size: 16px;
       font-family: var(--font);
       line-height: 1.5;
       max-height: 120px;
