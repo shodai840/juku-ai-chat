@@ -1091,8 +1091,52 @@ msgInput.addEventListener('keydown', (e) => {
   }
 });
 
+// ── 時間割アプリからの自動ログイン（#link=チケット）──
+// 生徒用時間割アプリで質問AIと連携している生徒は、時間割アプリの「質問AI を開く」から
+// #link=チケット 付きで開かれる。/api/auth/link で確かめて、ふつうのログインと同じ状態にする
+async function loginWithLinkTicket(ticket) {
+  try {
+    const res = await fetch('/api/auth/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // 前にログインしていれば、そのまま使えるようにする
+      if (getAuthToken() && getStudentName()) { afterLogin(); return; }
+      switchAuthTab('login');
+      showAuthError('login-error', data.error || '自動ログインできませんでした。名前とパスワードでログインしてね。');
+      showAuthModal();
+      return;
+    }
+    // この端末で前に別の生徒がログインしていたら、その人の学年・会話は持ち越さない
+    if (getStudentName() && getStudentName() !== data.name) {
+      sessionStorage.removeItem('studentGrade');
+      sessionStorage.removeItem('studentClass');
+      clearHistory();
+    }
+    setAuthToken(data.token);
+    localStorage.setItem('studentName', data.name);
+    hideAuthModal();
+    afterLogin();
+  } catch (err) {
+    if (getAuthToken() && getStudentName()) { afterLogin(); return; }
+    switchAuthTab('login');
+    showAuthError('login-error', '通信エラーが起きました。もう一度試してね。');
+    showAuthModal();
+  }
+}
+
 // ── 初期化 ──
 (function init() {
+  const m = /^#link=([\w.-]+)$/.exec(location.hash);
+  if (m) {
+    // チケットはURLに残さない（履歴やブックマークから使い回されないように）
+    history.replaceState(null, '', location.pathname + location.search);
+    loginWithLinkTicket(m[1]);
+    return;
+  }
   if (!getAuthToken() || !getStudentName()) {
     showAuthModal();
   } else {
