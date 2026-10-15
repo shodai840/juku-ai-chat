@@ -88,8 +88,8 @@ export default async function handler(req, res) {
   if (settings.line_notify_enabled !== false) {
     waitUntil(sendLineNotification(
       autoApprove
-        ? `【生徒登録】\n名前：${student.name}\n自動承認モードのため、承認済みで登録されました。`
-        : `【生徒登録申請】\n名前：${student.name}\n管理画面から承認してください。`
+        ? `【質問AI】生徒登録\n名前：${student.name}\n自動承認モードのため、承認済みで登録されました。`
+        : `【質問AI】生徒登録申請\n名前：${student.name}\n管理画面から承認してください。`
     ));
   }
 
