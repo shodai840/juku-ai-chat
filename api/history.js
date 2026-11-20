@@ -2,7 +2,7 @@
 // api/history.js — Vercel Serverless Function
 // ログイン中の生徒の会話履歴を取得する（ブラウザを閉じた後でも見返せるように）。
 // 一度に全件は返さず、新しい順にlimit件ずつ取得する（?before=ISO日時 でそれより古い分を追加取得）。
-import { verifyAuth } from '../lib/auth/verifyAuth.js';
+import { requireStudent } from '../lib/auth/verifyAuth.js';
 import { getMessagesForStudent } from '../lib/supabase.js';
 
 const DEFAULT_LIMIT = 50;
@@ -19,10 +19,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const student = await verifyAuth(req);
-  if (!student) {
-    return res.status(401).json({ error: 'ログインが必要です。もう一度ログインしてね。' });
-  }
+  const student = await requireStudent(req, res);
+  if (!student) return;
 
   const rawLimit = parseInt(req.query.limit, 10);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), MAX_LIMIT) : DEFAULT_LIMIT;
