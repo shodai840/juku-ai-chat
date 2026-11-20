@@ -2,7 +2,7 @@
 // api/feedback.js  — Vercel Serverless Function
 // AIの回答への👍👎フィードバックを受け取り、Geminiで科目を判定してからApps Scriptへ送信
 import { waitUntil } from '@vercel/functions';
-import { verifyAuth } from '../lib/auth/verifyAuth.js';
+import { requireStudent } from '../lib/auth/verifyAuth.js';
 
 function jstTimestamp() {
   const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
@@ -88,10 +88,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const student = await verifyAuth(req);
-  if (!student) {
-    return res.status(401).json({ error: 'ログインが必要です。もう一度ログインしてね。' });
-  }
+  const student = await requireStudent(req, res);
+  if (!student) return;
   const studentName = student.name;
   const { studentGrade, studentClass, feedback, questionText, aiReply } = req.body || {};
 

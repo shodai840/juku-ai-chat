@@ -422,3 +422,8 @@ APIキーなどの秘密情報は **Vercelの環境変数** に入れる（コ�
 
 ### 2026-10-15 21:00（登録時のLINE通知に「質問AI」を付けた）
 - 生徒の新規登録・登録申請のLINE通知（api/auth/register.js）の1行目を「【質問AI】生徒登録」「【質問AI】生徒登録申請」にした。Study Log・単語テストなど、同じLINEに届くほかのアプリの登録通知と見分けるため。
+
+### 2026-11-20 17:11
+- Supabase（無料プラン）が一時停止（Paused）していて管理画面に入れない（`/api/admin/students`が500）不具合が発生。止まっている間は、質問AI・履歴・フィードバック・ログイン・新規登録・時間割アプリからの自動ログインもすべて使えなかった。ユーザーがダッシュボードでRestoreして復旧。再発防止として以下を追加。
+- `api/keepalive.js`（新規）＋`vercel.json`の`crons`：Vercel Cronで毎日1回（UTC 0:00＝日本時間9:00）Supabaseを軽く読み（`lib/supabase.js`の`pingDatabase()`、10秒で打ち切り）、1週間アクセスが無いと止まる仕組みを回避する。失敗したら`LINE_ADMIN_USER_ID`（オーナー）にLINEで「Supabaseに接続できない／Pausedなら Restore を」と通知する。Vercel Cronが付ける`Authorization: Bearer <CRON_SECRET>`以外のアクセスは401で拒否（LINE通知の悪用防止）。**要作業：Vercelの環境変数に`CRON_SECRET`（16文字以上のランダム文字列）を追加すること。未設定だとkeepaliveは500で何もしない。**なお単語テストの`/healthz`はRenderのスリープ対策でDBに触れないため、Supabaseの一時停止対策にはならない（別物）。
+- `lib/auth/verifyAuth.js`：これまでDB障害時も「認証失敗（401）」扱いだったため、生徒側で強制ログアウト＋会話表示が消えていた。DB障害時は`AuthUnavailableError`を投げ、新設の`requireStudent()`が503（「いまサーバーの調子が悪くて使えないみたい」）を返すよう変更し、ログイン状態を残す。`api/chat.js`・`api/feedback.js`・`api/history.js`は`requireStudent()`を使うよう統一。クライアント側（`public/app.js`）は401以外のエラーはサーバーのメッセージをそのまま表示する既存の処理で対応できるため変更なし。モックテスト9件（CRON_SECRET未設定/不一致の拒否、正常時は通知なし、Paused(540)・接続不可でオーナーにLINE通知、DB障害で503・トークン不正で401）成功。
